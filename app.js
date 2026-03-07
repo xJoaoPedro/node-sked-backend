@@ -32,6 +32,6 @@ app.get('/api/users/:id', (req, res) => {
 
 console.log(PORT)
 // Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-})
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on http://0.0.0.0:${PORT}`);
+});
