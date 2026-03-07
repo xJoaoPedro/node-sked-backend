@@ -1,4 +1,6 @@
 import express, { json } from 'express';
+import 'dotenv/config';
+
 const app = express();
 const PORT = process.env.API_PORT || 3000;
 
@@ -28,6 +30,7 @@ app.get('/api/users/:id', (req, res) => {
   });
 });
 
+console.log(PORT)
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
