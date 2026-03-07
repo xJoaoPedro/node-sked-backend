@@ -1,0 +1,258 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum status_enum {
+  ACTIVE
+  DISABLED
+}
+
+enum plan_enum {
+  FREE
+  PRO
+}
+
+enum company_status_enum {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+enum role_enum {
+  MANAGER
+  EMPLOYEE
+}
+
+enum appointment_status {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELED
+  NO_SHOW
+}
+
+enum bot_interaction_type_enum {
+  APPOINTMENT
+  CANCELLATION
+  REAPPOINTMENT
+  INQUIRY
+  OTHER
+}
+
+enum bot_interaction_status_enum {
+  IN_PROGRESS
+  WAITING_PAYMENT
+  SCHEDULED
+  CANCELED
+  OTHER
+}
+
+enum signature_status_enum {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CANCELED
+}
+
+
+model User {
+  id         Int         @id @default(autoincrement())
+  name       String      @db.VarChar(255)
+  email      String      @unique @db.VarChar(255)
+  password   String      @db.VarChar(255)
+  phone      String      @db.VarChar(20)
+  status     status_enum @default(ACTIVE)
+  last_login DateTime?   @db.Timestamptz
+  created_at DateTime    @default(now()) @db.Timestamptz
+  updated_at DateTime    @updatedAt @db.Timestamptz
+
+  // Relations
+  companyUsers CompanyUser[]
+  scheduleOpenings ScheduleOpening[]
+  scheduleBlocks ScheduleBlock[]
+  appointmentEmployees Appointment[] @relation(name: "employee")
+  appointmentClients Appointment[] @relation(name: "client")
+  botInteractions BotInteraction[]
+
+  @@map("users")
+}
+
+model Company {
+  id            Int                 @id @default(autoincrement())
+  legal_name    String              @db.VarChar(255)
+  fantasy_name  String              @db.VarChar(255)
+  cnpj          String              @db.VarChar(255)
+  email         String?             @db.VarChar(255)
+  phone         String?             @db.VarChar(255)
+  interval_slot Int                 @default(15)
+  plan          plan_enum           @default(FREE)
+  status        company_status_enum @default(PENDING)
+  approve_date  DateTime?           @db.Timestamptz
+  created_at    DateTime            @default(now()) @db.Timestamptz
+  updated_at    DateTime            @updatedAt @db.Timestamptz
+
+  // Relations
+  companyUsers CompanyUser[]
+  addresses Address[]
+  scheduleOpenings ScheduleOpening[]
+  scheduleBlocks ScheduleBlock[]
+  services Service[]
+  appointments Appointment[]
+  botInteractions BotInteraction[]
+  signatures Signature[]
+
+  @@map("companies")
+}
+
+model CompanyUser {
+  id            Int         @id @default(autoincrement())
+  company_id    Int
+  user_id       Int
+  role          role_enum
+  status        status_enum @default(ACTIVE)
+  created_at    DateTime    @default(now()) @db.Timestamptz
+  updated_at    DateTime    @updatedAt @db.Timestamptz
+
+  company       Company     @relation(fields: [company_id], references: [id])
+  user          User        @relation(fields: [user_id], references: [id])
+  
+  @@unique([company_id, user_id])
+  @@map("companies_users")
+}
+
+model Address {
+  id           Int      @id @default(autoincrement())
+  company_id   Int
+  cep          String   @db.VarChar(10)
+  street       String   @db.VarChar(255)
+  number       String   @db.VarChar(20)
+  complement   String   @db.VarChar(255)
+  neighborhood String   @db.VarChar(255)
+  city         String   @db.VarChar(255)
+  state        String   @db.VarChar(2)
+  created_at   DateTime @default(now()) @db.Timestamptz
+  updated_at   DateTime @updatedAt @db.Timestamptz
+
+  company      Company  @relation(fields: [company_id], references: [id])
+
+  @@map("addresses")
+}
+
+model ScheduleOpening {
+  id          Int      @id @default(autoincrement())
+  company_id  Int
+  employee_id Int
+  week_day    Int
+  start_time  DateTime @db.Time
+  end_time    DateTime @db.Time
+  created_at  DateTime @default(now()) @db.Timestamptz
+  updated_at  DateTime @updatedAt @db.Timestamptz
+
+  company     Company  @relation(fields: [company_id], references: [id])
+  employee    User     @relation(fields: [employee_id], references: [id])
+
+  @@map("schedule_openings")
+}
+
+model ScheduleBlock {
+  id          Int       @id @default(autoincrement())
+  company_id  Int
+  employee_id Int
+  start_time  DateTime  @db.Timestamptz
+  end_time    DateTime? @db.Timestamptz
+  reason      String    @db.VarChar(255)
+  created_at  DateTime  @default(now()) @db.Timestamptz
+  updated_at  DateTime  @updatedAt @db.Timestamptz
+
+  company     Company   @relation(fields: [company_id], references: [id])
+  employee    User      @relation(fields: [employee_id], references: [id])
+
+  @@map("schedule_blocks")
+}
+
+model Service {
+  id               Int         @id @default(autoincrement())
+  company_id       Int
+  name             String      @db.VarChar(255)
+  description      String?     @db.VarChar(255)
+  duration_minutes Int
+  buffer_minutes   Int         @default(0)
+  price            Decimal     @db.Decimal(10,2)
+  status           status_enum @default(ACTIVE)
+  created_at       DateTime    @default(now()) @db.Timestamptz
+  updated_at       DateTime    @updatedAt @db.Timestamptz
+
+  company          Company     @relation(fields: [company_id], references: [id])
+
+  // Relations
+  appointments Appointment[]
+
+  @@map("services")
+}
+
+model Appointment {
+  id           Int                @id @default(autoincrement())
+  company_id   Int
+  service_id   Int
+  employee_id  Int
+  client_id    Int
+  start_time   DateTime           @db.Timestamptz()
+  end_time     DateTime           @db.Timestamptz()
+  observations String?            @db.VarChar(255)
+  status       appointment_status @default(PENDING)
+  created_at   DateTime           @default(now()) @db.Timestamptz
+  updated_at   DateTime           @updatedAt @db.Timestamptz
+
+  company      Company            @relation(fields: [company_id], references: [id])
+  service      Service            @relation(fields: [service_id], references: [id])
+  employee     User               @relation(name: "employee", fields: [employee_id], references: [id])
+  client       User               @relation(name: "client", fields: [client_id], references: [id])  
+
+  @@index([company_id, start_time])
+  @@index([employee_id, start_time])
+  @@map("appointments")
+}
+
+model BotInteraction {
+  id         Int                         @id @default(autoincrement())
+  company_id Int
+  client_id  Int
+  type       bot_interaction_type_enum
+  status     bot_interaction_status_enum 
+  data       Json
+  created_at DateTime                    @default(now()) @db.Timestamptz
+  updated_at DateTime                    @updatedAt @db.Timestamptz
+
+  company    Company                     @relation(fields: [company_id], references: [id])
+  client     User                        @relation(fields: [client_id], references: [id])
+
+  @@index([company_id])
+  @@index([client_id])
+  @@map("bot_interactions")
+}
+
+model Signature {
+  id                Int                   @id @default(autoincrement())
+  company_id        Int
+  plan              plan_enum             @default(FREE)
+  status            signature_status_enum @default(PENDING)
+  start_date        DateTime              @db.Timestamptz()
+  renovation_date   DateTime              @db.Timestamptz()
+  canceled          Boolean
+  cancellation_date DateTime?             @db.Timestamptz()
+  paid              Boolean               @default(false)
+  created_at        DateTime              @default(now()) @db.Timestamptz
+  updated_at        DateTime              @updatedAt @db.Timestamptz
+
+  company           Company               @relation(fields: [company_id], references: [id])
+
+  @@map("signatures")
+}
