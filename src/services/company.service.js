@@ -15,7 +15,7 @@ export class CompanyService {
       where: { id },
     });
 
-    return !company ? null : company;
+    return company ?? null;
   }
 
   async create(company) {
