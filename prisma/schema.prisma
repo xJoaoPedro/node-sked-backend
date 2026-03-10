@@ -67,7 +67,7 @@ model User {
   name       String      @db.VarChar(255)
   email      String      @unique @db.VarChar(255)
   password   String      @db.VarChar(255)
-  phone      String      @db.VarChar(20)
+  phone      String      @db.VarChar(11)
   status     status_enum @default(ACTIVE)
   last_login DateTime?   @db.Timestamptz
   created_at DateTime    @default(now()) @db.Timestamptz
@@ -88,9 +88,9 @@ model Company {
   id            Int                 @id @default(autoincrement())
   legal_name    String              @db.VarChar(255)
   fantasy_name  String              @db.VarChar(255)
-  cnpj          String              @db.VarChar(255)
+  cnpj          String              @db.VarChar(14)
   email         String?             @db.VarChar(255)
-  phone         String?             @db.VarChar(255)
+  phone         String?             @db.VarChar(11)
   interval_slot Int                 @default(15)
   plan          plan_enum           @default(FREE)
   status        company_status_enum @default(PENDING)

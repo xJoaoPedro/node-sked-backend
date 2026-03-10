@@ -1,18 +1,18 @@
-import { UserService } from "../services/user.service.js";
+import { CompanyService } from "../services/company.service.js";
 import {
-  createUserValidator,
-  updateUserValidator,
-} from "../validators/user.validator.js";
+  createCompanyValidator,
+  updateCompanyValidator,
+} from "../validators/company.validator.js";
 
-const service = new UserService();
+const service = new CompanyService();
 
-export default class UserController {
+export default class CompanyController {
   async findAll(req, res) {
-    const users = await service.findAll();
+    const companies = await service.findAll();
 
     return res.status(200).json({
       message: "Consulta realizada com sucesso!",
-      data: users,
+      data: companies,
     });
   }
 
@@ -25,22 +25,22 @@ export default class UserController {
       });
     }
 
-    const user = await service.findOne(id);
+    const company = await service.findOne(id);
 
-    if (!user) {
+    if (!company) {
       res.status(404).json({
-        message: "Usuário não encontrado",
+        message: "Empresa não encontrada",
       });
     }
 
     res.status(200).json({
-      message: "Usuário encontrado com sucesso!",
-      data: user,
+      message: "Empresa encontrada com sucesso!",
+      data: company,
     });
   }
 
   async create(req, res) {
-    const parsed = createUserValidator.safeParse(req.body);
+    const parsed = createCompanyValidator.safeParse(req.body);
 
     if (!parsed.success) {
       return res.status(400).json({
@@ -55,7 +55,7 @@ export default class UserController {
   }
 
   async update(req, res) {
-    const parsed = updateUserValidator.safeParse(req.body);
+    const parsed = updateCompanyValidator.safeParse(req.body);
 
     if (!parsed.success) {
       return res.status(400).json({
@@ -69,7 +69,7 @@ export default class UserController {
     if (update) return res.status(204).json();
     else
       return res.status(404).json({
-        message: "Usuário não encontrado",
+        message: "Empresa não encontrada",
       });
   }
 
@@ -79,7 +79,7 @@ export default class UserController {
     if (deleted) return res.status(204).json();
     else
       return res.status(404).json({
-        message: "Usuário não encontrado",
+        message: "Empresa não encontrada",
       });
   }
 }

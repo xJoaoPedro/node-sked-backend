@@ -1,17 +1,16 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcrypt";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-export class UserService {
+export class CompanyService {
   async findAll() {
-    return await prisma.user.findMany();
+    return await prisma.company.findMany();
   }
 
   async findOne(id) {
-    const user = await prisma.user.findUnique({
+    const company = await prisma.company.findUnique({
       where: { id },
       select: {
         id: true,
@@ -23,20 +22,22 @@ export class UserService {
       },
     });
 
-    return !user ? null : user;
+    return !company ? null : company;
   }
 
-  async create(user) {
-    const { name, email, password, phone } = user;
-    const hashedPassword = await bcrypt.hash(password, 10);
+  async create(company) {
+    const {
+      legal_name, fantasy_name, cnpj,
+      email, phone, interval_slot,
+      plan, status, approve_date,
+    } = company;
     const now = new Date();
 
     await prisma.user.create({
       data: {
-        name,
-        email,
-        password: hashedPassword,
-        phone,
+        legal_name, fantasy_name, cnpj,
+        email, phone, interval_slot,
+        plan, status, approve_date,
         created_at: now,
         updated_at: now,
       },
@@ -47,7 +48,7 @@ export class UserService {
 
   async update(id, data) {
     try {
-      await prisma.user.update({
+      await prisma.company.update({
         where: { id },
         data,
       });
