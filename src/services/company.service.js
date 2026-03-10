@@ -13,14 +13,6 @@ export class CompanyService {
   async findOne(id) {
     const company = await prisma.company.findUnique({
       where: { id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        status: true,
-        last_login: true,
-      },
     });
 
     return !company ? null : company;
@@ -34,7 +26,7 @@ export class CompanyService {
     } = company;
     const now = new Date();
 
-    await prisma.user.create({
+    await prisma.company.create({
       data: {
         legal_name, fantasy_name, cnpj,
         email, phone, interval_slot,
@@ -62,7 +54,7 @@ export class CompanyService {
 
   async delete(id) {
     try {
-      await prisma.user.delete({
+      await prisma.company.delete({
         where: { id },
       });
 

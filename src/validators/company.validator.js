@@ -7,8 +7,8 @@ const companyValidator = z.object({
   email:         z.email().max(255),
   phone:         z.string().max(11),
   interval_slot: z.number().nullable().optional(),
-  plan:          z.enum(["FREE", "PRO"]),
-  status:        z.enum(["PENDING", "APPROVED", "DENIED"]),
+  plan:          z.enum(["FREE", "PRO"]).nullable().optional(),
+  status:        z.enum(["PENDING", "APPROVED", "DENIED"]).nullable().optional(),
   approve_date:  z.date().nullable().optional(),
 });
 

@@ -14,14 +14,6 @@ export class UserService {
   async findOne(id) {
     const user = await prisma.user.findUnique({
       where: { id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        status: true,
-        last_login: true,
-      },
     });
 
     return !user ? null : user;
