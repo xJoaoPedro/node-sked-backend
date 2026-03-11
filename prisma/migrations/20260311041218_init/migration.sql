@@ -28,7 +28,7 @@ CREATE TABLE "users" (
     "name" VARCHAR(255) NOT NULL,
     "email" VARCHAR(255) NOT NULL,
     "password" VARCHAR(255) NOT NULL,
-    "phone" VARCHAR(20) NOT NULL,
+    "phone" VARCHAR(11) NOT NULL,
     "status" "status_enum" NOT NULL DEFAULT 'ACTIVE',
     "last_login" TIMESTAMPTZ,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -42,9 +42,9 @@ CREATE TABLE "companies" (
     "id" SERIAL NOT NULL,
     "legal_name" VARCHAR(255) NOT NULL,
     "fantasy_name" VARCHAR(255) NOT NULL,
-    "cnpj" VARCHAR(255) NOT NULL,
+    "cnpj" VARCHAR(14) NOT NULL,
     "email" VARCHAR(255),
-    "phone" VARCHAR(255),
+    "phone" VARCHAR(11),
     "interval_slot" INTEGER NOT NULL DEFAULT 15,
     "plan" "plan_enum" NOT NULL DEFAULT 'FREE',
     "status" "company_status_enum" NOT NULL DEFAULT 'PENDING',
@@ -75,7 +75,7 @@ CREATE TABLE "addresses" (
     "cep" VARCHAR(10) NOT NULL,
     "street" VARCHAR(255) NOT NULL,
     "number" VARCHAR(20) NOT NULL,
-    "complement" VARCHAR(255) NOT NULL,
+    "complement" VARCHAR(255),
     "neighborhood" VARCHAR(255) NOT NULL,
     "city" VARCHAR(255) NOT NULL,
     "state" VARCHAR(2) NOT NULL,
@@ -168,7 +168,6 @@ CREATE TABLE "signatures" (
     "status" "signature_status_enum" NOT NULL DEFAULT 'PENDING',
     "start_date" TIMESTAMPTZ NOT NULL,
     "renovation_date" TIMESTAMPTZ NOT NULL,
-    "canceled" BOOLEAN NOT NULL,
     "cancellation_date" TIMESTAMPTZ,
     "paid" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -196,46 +195,46 @@ CREATE INDEX "bot_interactions_company_id_idx" ON "bot_interactions"("company_id
 CREATE INDEX "bot_interactions_client_id_idx" ON "bot_interactions"("client_id");
 
 -- AddForeignKey
-ALTER TABLE "companies_users" ADD CONSTRAINT "companies_users_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "companies_users" ADD CONSTRAINT "companies_users_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "companies_users" ADD CONSTRAINT "companies_users_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "companies_users" ADD CONSTRAINT "companies_users_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "addresses" ADD CONSTRAINT "addresses_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "addresses" ADD CONSTRAINT "addresses_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "schedule_openings" ADD CONSTRAINT "schedule_openings_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "schedule_openings" ADD CONSTRAINT "schedule_openings_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "schedule_openings" ADD CONSTRAINT "schedule_openings_employee_id_fkey" FOREIGN KEY ("employee_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "schedule_openings" ADD CONSTRAINT "schedule_openings_employee_id_fkey" FOREIGN KEY ("employee_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "schedule_blocks" ADD CONSTRAINT "schedule_blocks_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "schedule_blocks" ADD CONSTRAINT "schedule_blocks_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "schedule_blocks" ADD CONSTRAINT "schedule_blocks_employee_id_fkey" FOREIGN KEY ("employee_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "schedule_blocks" ADD CONSTRAINT "schedule_blocks_employee_id_fkey" FOREIGN KEY ("employee_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "services" ADD CONSTRAINT "services_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "services" ADD CONSTRAINT "services_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "appointments" ADD CONSTRAINT "appointments_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "appointments" ADD CONSTRAINT "appointments_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "appointments" ADD CONSTRAINT "appointments_service_id_fkey" FOREIGN KEY ("service_id") REFERENCES "services"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "appointments" ADD CONSTRAINT "appointments_service_id_fkey" FOREIGN KEY ("service_id") REFERENCES "services"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "appointments" ADD CONSTRAINT "appointments_employee_id_fkey" FOREIGN KEY ("employee_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "appointments" ADD CONSTRAINT "appointments_employee_id_fkey" FOREIGN KEY ("employee_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "appointments" ADD CONSTRAINT "appointments_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "appointments" ADD CONSTRAINT "appointments_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "bot_interactions" ADD CONSTRAINT "bot_interactions_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "bot_interactions" ADD CONSTRAINT "bot_interactions_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "bot_interactions" ADD CONSTRAINT "bot_interactions_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "bot_interactions" ADD CONSTRAINT "bot_interactions_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "signatures" ADD CONSTRAINT "signatures_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "signatures" ADD CONSTRAINT "signatures_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
