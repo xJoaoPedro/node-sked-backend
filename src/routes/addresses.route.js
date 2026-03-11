@@ -1,8 +1,8 @@
 import { Router } from "express";
-import AddressesController from "../controllers/address.controller.js";
+import AddressController from "../controllers/address.controller.js";
 
 const addressesRouter = Router();
-const controller = new AddressesController();
+const controller = new AddressController();
 
 // GET /
 addressesRouter.get("/", controller.findAll);

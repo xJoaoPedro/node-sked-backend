@@ -1,18 +1,18 @@
-import { AddressService } from "../services/address.service.js";
+import { ScheduleOpeningService } from "../services/schedule_opening.service.js";
 import {
-  createAddressValidator,
-  updateAddressValidator,
-} from "../validators/address.validator.js";
+  createScheduleOpeningValidator,
+  updateScheduleOpeningValidator,
+} from "../validators/schedule_opening.validator.js";
 
-const service = new AddressService();
+const service = new ScheduleOpeningService();
 
-export default class AddressController {
+export default class ScheduleOpeningController {
   async findAll(req, res) {
-    const addresses = await service.findAll();
+    const scheduleOpenings = await service.findAll();
 
     return res.status(200).json({
       message: "Consulta realizada com sucesso!",
-      data: addresses,
+      data: scheduleOpenings,
     });
   }
 
@@ -25,22 +25,22 @@ export default class AddressController {
       });
     }
 
-    const address = await service.findOne(id);
+    const scheduleOpening = await service.findOne(id);
 
-    if (!address) {
+    if (!scheduleOpening) {
       res.status(404).json({
-        message: "Endereço não encontrado",
+        message: "Abertura de agenda não encontrada",
       });
     }
 
     res.status(200).json({
-      message: "Endereço encontrado com sucesso!",
-      data: address,
+      message: "Abertura de agenda encontrada com sucesso!",
+      data: scheduleOpening,
     });
   }
 
   async create(req, res) {
-    const parsed = createAddressValidator.safeParse(req.body);
+    const parsed = createScheduleOpeningValidator.safeParse(req.body);
 
     if (!parsed.success) {
       return res.status(400).json({
@@ -55,7 +55,7 @@ export default class AddressController {
   }
 
   async update(req, res) {
-    const parsed = updateAddressValidator.safeParse(req.body);
+    const parsed = updateScheduleOpeningValidator.safeParse(req.body);
 
     if (!parsed.success) {
       return res.status(400).json({
@@ -69,7 +69,7 @@ export default class AddressController {
     if (update) return res.status(204).json();
     else
       return res.status(404).json({
-        message: "Endereço não encontrado",
+        message: "Abertura de agenda não encontrada",
       });
   }
 
@@ -79,7 +79,7 @@ export default class AddressController {
     if (deleted) return res.status(204).json();
     else
       return res.status(404).json({
-        message: "Endereço não encontrado",
+        message: "Abertura de agenda não encontrada",
       });
   }
 }
