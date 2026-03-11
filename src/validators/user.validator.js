@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const userValidator = z.object({
+const validator = z.object({
   name:       z.string().max(255),
   email:      z.email().max(255),
   password:   z.string().min(6).max(30),
@@ -9,5 +9,5 @@ const userValidator = z.object({
   last_login: z.date().nullable().optional(),
 });
 
-export const createUserValidator = userValidator;
-export const updateUserValidator = userValidator.partial();
+export const createUserValidator = validator;
+export const updateUserValidator = validator.partial();

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const companyValidator = z.object({
+const validator = z.object({
   legal_name:    z.string().max(255),
   fantasy_name:  z.string().max(255),
   cnpj:          z.string().max(14),
@@ -12,5 +12,5 @@ const companyValidator = z.object({
   approve_date:  z.date().nullable().optional(),
 });
 
-export const createCompanyValidator = companyValidator;
-export const updateCompanyValidator = companyValidator.partial();
+export const createCompanyValidator = validator;
+export const updateCompanyValidator = validator.partial();

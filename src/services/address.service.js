@@ -1,35 +1,45 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import pkg from "@prisma/client";
-import bcrypt from "bcrypt";
 
-const { PrismaClient } = pkg 
+const { PrismaClient } = pkg;
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-export class UserService {
+export class AddressService {
   async findAll() {
-    return await prisma.user.findMany();
+    return await prisma.address.findMany();
   }
 
   async findOne(id) {
-    const user = await prisma.user.findUnique({
+    const address = await prisma.address.findUnique({
       where: { id },
     });
 
-    return user ?? null;
+    return address ?? null;
   }
 
-  async create(user) {
-    const { name, email, password, phone } = user;
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const now = new Date();
+  async create(address) {
+    const {
+      company_id,
+      cep,
+      street,
+      number,
+      complement,
+      neighborhood,
+      city,
+      state,
+    } = address;
 
-    await prisma.user.create({
+    await prisma.address.create({
       data: {
-        name,
-        email,
-        password: hashedPassword,
-        phone,
+        company_id: Number(company_id),
+        cep,
+        street,
+        number,
+        complement,
+        neighborhood,
+        city,
+        state,
       },
     });
 
@@ -38,7 +48,7 @@ export class UserService {
 
   async update(id, data) {
     try {
-      await prisma.user.update({
+      await prisma.address.update({
         where: { id },
         data,
       });
@@ -51,7 +61,7 @@ export class UserService {
 
   async delete(id) {
     try {
-      await prisma.user.delete({
+      await prisma.address.delete({
         where: { id },
       });
 

@@ -31,8 +31,6 @@ export class CompanyService {
         legal_name, fantasy_name, cnpj,
         email, phone, interval_slot,
         plan, status, approve_date,
-        created_at: now,
-        updated_at: now,
       },
     });
 
