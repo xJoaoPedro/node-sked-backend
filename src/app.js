@@ -5,6 +5,7 @@ import companiesRouter from "./routes/companies.route.js";
 import companiesUsersRouter from "./routes/companies_users.route.js";
 import addressesRouter from "./routes/addresses.route.js";
 import scheduleOpeningsRouter from "./routes/schedule_openings.route.js";
+import scheduleBlocksRouter from "./routes/schedule_blocks.route.js";
 
 const app = express();
 
@@ -16,5 +17,6 @@ app.use("/api/companies", companiesRouter);
 app.use("/api/companies-users", companiesUsersRouter);
 app.use("/api/addresses", addressesRouter);
 app.use("/api/schedule-openings", scheduleOpeningsRouter);
+app.use("/api/schedule-blocks", scheduleBlocksRouter);
 
 export default app;

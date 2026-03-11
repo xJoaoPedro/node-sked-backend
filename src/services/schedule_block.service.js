@@ -1,34 +1,34 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import pkg from "@prisma/client";
-import { timeToDate } from "../utils/dateParser.js"
+import { formatDate } from "../utils/dateParser.js"
 
 const { PrismaClient } = pkg;
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-export class ScheduleOpeningService {
+export class ScheduleBlockService {
   async findAll() {
-    return await prisma.scheduleOpening.findMany();
+    return await prisma.scheduleBlock.findMany();
   }
 
   async findOne(id) {
-    const scheduleOpening = await prisma.scheduleOpening.findUnique({
+    const scheduleBlock = await prisma.scheduleBlock.findUnique({
       where: { id },
     });
 
-    return scheduleOpening ?? null;
+    return scheduleBlock ?? null;
   }
 
-  async create(scheduleOpening) {
-    const { company_id, employee_id, week_day, start_time, end_time } = scheduleOpening;
+  async create(scheduleBlock) {
+    const { company_id, employee_id, start_time, end_time, reason } = scheduleBlock;
 
-    await prisma.scheduleOpening.create({
+    await prisma.scheduleBlock.create({
       data: {
         company_id: Number(company_id),
         employee_id: Number(employee_id),
-        week_day: Number(week_day),
-        start_time: timeToDate(start_time),
-        end_time: timeToDate(end_time),
+        start_time: formatDate(start_time),
+        end_time: formatDate(end_time),
+        reason
       },
     });
 
@@ -36,11 +36,11 @@ export class ScheduleOpeningService {
   }
 
   async update(id, data) {
-    data.start_time = timeToDate(data.start_time)
-    data.end_time = timeToDate(data.end_time)
+    data.start_time = formatDate(data.start_time)
+    data.end_time = formatDate(data.end_time)
 
     try {
-      await prisma.scheduleOpening.update({
+      await prisma.scheduleBlock.update({
         where: { id },
         data,
       });
@@ -53,7 +53,7 @@ export class ScheduleOpeningService {
 
   async delete(id) {
     try {
-      await prisma.scheduleOpening.delete({
+      await prisma.scheduleBlock.delete({
         where: { id },
       });
 
