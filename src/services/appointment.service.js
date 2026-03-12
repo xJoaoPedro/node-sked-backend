@@ -1,9 +1,11 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import pkg from "@prisma/client";
+import socketServer from "../socket.js";
 
 const { PrismaClient } = pkg;
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
+const socket = socketServer;
 
 export class AppointmentService {
   async findAll() {
@@ -42,6 +44,8 @@ export class AppointmentService {
         status
       },
     });
+    
+    socket.getIO().emit("new_appointment", appointment);
 
     return;
   }

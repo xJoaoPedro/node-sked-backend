@@ -10,6 +10,10 @@ import servicesRouter from "./routes/services.route.js";
 import appointmentsRouter from "./routes/appointments.route.js";
 import botInteractionsRouter from "./routes/bot_interaction.route.js";
 import signaturesRouter from "./routes/signatures.route.js";
+import { createServer } from "node:http";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import socketServer from "./socket.js";
 
 const app = express();
 
@@ -27,4 +31,20 @@ app.use("/api/appointments", appointmentsRouter);
 app.use("/api/bot-interactions", botInteractionsRouter);
 app.use("/api/signatures", signaturesRouter);
 
-export default app;
+const server = createServer(app)
+const socket = socketServer;
+const io = socket.init(server);
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+app.get('/', (req, res) => {
+  res.sendFile(join(__dirname, 'index.html'));
+});
+
+io.on('connection', (socket) => {
+  socket.on('chat message', (msg) => {
+    console.log('message: ' + msg);
+  });
+});
+
+export default server;
