@@ -8,6 +8,7 @@ import scheduleOpeningsRouter from "./routes/schedule_openings.route.js";
 import scheduleBlocksRouter from "./routes/schedule_blocks.route.js";
 import servicesRouter from "./routes/services.route.js";
 import appointmentsRouter from "./routes/appointments.route.js";
+import botInteractionsRouter from "./routes/bot_interaction.route.js";
 
 const app = express();
 
@@ -22,5 +23,6 @@ app.use("/api/schedule-openings", scheduleOpeningsRouter);
 app.use("/api/schedule-blocks", scheduleBlocksRouter);
 app.use("/api/services", servicesRouter);
 app.use("/api/appointments", appointmentsRouter);
+app.use("/api/bot-interactions", botInteractionsRouter);
 
 export default app;
