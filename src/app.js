@@ -7,6 +7,7 @@ import addressesRouter from "./routes/addresses.route.js";
 import scheduleOpeningsRouter from "./routes/schedule_openings.route.js";
 import scheduleBlocksRouter from "./routes/schedule_blocks.route.js";
 import servicesRouter from "./routes/services.route.js";
+import appointmentsRouter from "./routes/appointments.route.js";
 
 const app = express();
 
@@ -20,5 +21,6 @@ app.use("/api/addresses", addressesRouter);
 app.use("/api/schedule-openings", scheduleOpeningsRouter);
 app.use("/api/schedule-blocks", scheduleBlocksRouter);
 app.use("/api/services", servicesRouter);
+app.use("/api/appointments", appointmentsRouter);
 
 export default app;
