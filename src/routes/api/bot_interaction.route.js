@@ -1,5 +1,5 @@
 import { Router } from "express";
-import BotInteractionController from "../controllers/bot_interaction.controller.js";
+import BotInteractionController from "../../controllers/bot_interaction.controller.js";
 
 const botInteractionsRouter = Router();
 const controller = new BotInteractionController();

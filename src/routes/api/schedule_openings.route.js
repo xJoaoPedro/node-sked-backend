@@ -1,5 +1,5 @@
 import { Router } from "express";
-import ScheduleOpeningController from "../controllers/schedule_opening.controller.js";
+import ScheduleOpeningController from "../../controllers/schedule_opening.controller.js";
 
 const scheduleOpeningsRouter = Router();
 const controller = new ScheduleOpeningController();

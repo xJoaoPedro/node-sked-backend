@@ -1,5 +1,5 @@
 import { Router } from "express";
-import SignatureController from "../controllers/signature.controller.js";
+import SignatureController from "../../controllers/signature.controller.js";
 
 const signaturesRouter = Router();
 const controller = new SignatureController();
