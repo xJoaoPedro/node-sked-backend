@@ -14,12 +14,16 @@ import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import socketServer from "./socket.js";
+import authRouter from "./routes/auth.route.js";
+import { auth } from "./utils/authenticator.js";
 
 const app = express();
 
 app.use(json());
-
+app.use(auth)
 app.use(express.urlencoded({ extended: true }));
+
+app.use("/auth", authRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/companies", companiesRouter);
 app.use("/api/companies-users", companiesUsersRouter);
