@@ -8,6 +8,11 @@ const prisma = new PrismaClient({ adapter });
 
 export class UserService {
   async findAll() {
+	  try {
+		  return await prisma.user.findMany();
+	  } catch (err) {
+		  console.log(err);
+	  }
     return await prisma.user.findMany();
   }
 
