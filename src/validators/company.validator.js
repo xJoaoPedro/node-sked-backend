@@ -1,11 +1,12 @@
 import { z } from "zod";
 
 const validator = z.object({
-  legal_name:    z.string().max(255),
-  fantasy_name:  z.string().max(255),
-  cnpj:          z.string().max(14),
+  legal_name:    z.string().max(255).optional(),
+  fantasy_name:  z.string().max(255).optional(),
+  cnpj:          z.string().max(14).optional(),
   email:         z.email().max(255),
-  phone:         z.string().max(11),
+  password:      z.string().min(6).max(30),
+  phone:         z.string().max(11).optional(),
   interval_slot: z.number().nullable().optional(),
   plan:          z.enum(["FREE", "PRO"]).nullable().optional(),
   status:        z.enum(["PENDING", "APPROVED", "DENIED"]).nullable().optional(),

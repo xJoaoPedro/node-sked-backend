@@ -1,37 +1,61 @@
-import { AuthService } from "../services/auth.service.js";
+import { createCompanyValidator } from "../validators/company.validator.js";
 import { createUserValidator } from "../validators/user.validator.js";
-import jwt from "jsonwebtoken";
+import { CompanyService } from "../services/company.service.js";
+import { UserService } from "../services/user.service.js";
 
-const service = new AuthService();
+const companyService = new CompanyService();
+const userService = new UserService();
 
-export default class AppointmentController {
-  async register(req, res) {
-    const parsed = createAppointmentValidator.safeParse(req.body);
+function parse(req, res, type) {
+  let parsed = null;
 
-    if (!parsed.success) {
-      return res.status(400).json({
-        message: "Dados inválidos",
-        errors: JSON.parse(parsed.error),
-      });
-    }
+  switch (type) {
+    case "user":
+      parsed = createUserValidator.safeParse(req);
+      break;
+    case "company":
+      parsed = createCompanyValidator.safeParse(req);
+      break;
+  }
 
-    await service.create(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      message: "Dados inválidos",
+      errors: JSON.parse(parsed.error),
+    });
+  }
+}
+
+export default class AuthController {
+  async userRegister(req, res) {
+    parse(req.body, res, "user");
+
+    await userService.userRegister(req.body);
 
     res.status(204).json();
   }
 
-  async login(req, res) {
-    const parsed = createUserValidator.safeParse(req.body);
+  async companyRegister(req, res) {
+    parse(req.body, res, "company");
 
-    if (!parsed.success) {
-      return res.status(400).json({
-        message: "Dados inválidos",
-        errors: JSON.parse(parsed.error),
-      });
-    }
+    await companyService.create(req.body);
 
-    const token = await service.login(req.body)
+    res.status(204).json();
+  }
 
-    return res.json({ token })
-  } 
+  async userLogin(req, res) {
+    parse(req.body, res, "user");
+
+    const data = await userService.userLogin(req.body, res);
+
+    return res.json(data);
+  }
+
+  async companyLogin(req, res) {
+    parse(req.body, res, "company");
+
+    const data = await companyService.login(req.body, res);
+
+    return res.json(data);
+  }
 }

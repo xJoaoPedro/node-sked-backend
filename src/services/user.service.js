@@ -1,6 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import pkg from "@prisma/client";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 
 const { PrismaClient } = pkg 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -27,8 +28,7 @@ export class UserService {
   async create(user) {
     const { name, email, password, phone } = user;
     const hashedPassword = await bcrypt.hash(password, 10);
-    const now = new Date();
-
+   
     await prisma.user.create({
       data: {
         name,
@@ -64,5 +64,31 @@ export class UserService {
     } catch (error) {
       return false;
     }
+  }
+
+  async login(credentials, res) {
+    const { email, password } = credentials;
+    
+    const user = await prisma.user.findUnique({
+      where: { email: email },
+    });
+
+    if (!user) return res.status(401).json({ error: "Credenciais inválidas" });
+
+    const valid = await bcrypt.compare(password, user.password);
+
+    if (!valid) return res.status(401).json({ error: "Credenciais inválidas" });
+
+    return {
+      token: jwt.sign(
+        {
+          user_id: user.id,
+          company_id: user.company_id,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: "1d" },
+      ),
+      companyId: user.company_id
+    } 
   }
 }

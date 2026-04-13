@@ -20,3 +20,6 @@ companiesRouter.patch("/:id", controller.update);
 companiesRouter.delete("/:id", controller.delete);
 
 export default companiesRouter;
+
+// TODO GET /id/data (todos dados de empresa)
+// /api/companies/${id}/data
