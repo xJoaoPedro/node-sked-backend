@@ -10,6 +10,9 @@ companiesRouter.get("/", controller.findAll);
 // GET /id
 companiesRouter.get("/:id", controller.findOne);
 
+// GET /id/data (todos dados de empresa)
+companiesRouter.get('/:id/data', controller.getAllData);
+
 // POST /
 companiesRouter.post("/", controller.create);
 
@@ -20,6 +23,3 @@ companiesRouter.patch("/:id", controller.update);
 companiesRouter.delete("/:id", controller.delete);
 
 export default companiesRouter;
-
-// TODO GET /id/data (todos dados de empresa)
-// /api/companies/${id}/data

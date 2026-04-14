@@ -82,4 +82,22 @@ export default class CompanyController {
         message: "Empresa não encontrada",
       });
   }
+
+  async getAllData(req, res) {
+    const id = Number(req.params.id);
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const data = await service.getAllData(id);
+
+    res.status(200).json({
+      message: "Empresa encontrada com sucesso!",
+      data: data,
+    });
+    
+  }
 }

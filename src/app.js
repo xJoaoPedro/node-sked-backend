@@ -20,7 +20,7 @@ app.use(json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/auth", authRouter);
-app.use("/api", auth, apiRouter)
+app.use("/api", auth, apiRouter);
 
 const server = createServer(app);
 const socket = socketServer;

@@ -67,26 +67,274 @@ export class CompanyService {
   async login(credentials, res) {
     const { email, password } = credentials;
     
-    const user = await prisma.company.findUnique({
+    const company = await prisma.company.findUnique({
       where: { email: email },
     });
 
-    if (!user) return res.status(401).json({ error: "Credenciais inválidas" });
+    if (!company) return res.status(401).json({ error: "Credenciais inválidas" });
 
-    const valid = await bcrypt.compare(password, user.password);
+    const valid = await bcrypt.compare(password, company.password);
 
     if (!valid) return res.status(401).json({ error: "Credenciais inválidas" });
 
     return {
       token: jwt.sign(
         {
-          user_id: user.id,
-          company_id: user.company_id,
+          company_id: company.id,
         },
         process.env.JWT_SECRET,
         { expiresIn: "1d" },
       ),
-      companyId: user.company_id
+      id: company.id
     } 
+  }
+
+  async getAllData(id) {
+    const now = new Date()
+
+    const startOfDay = new Date(now)
+    startOfDay.setHours(0, 0, 0, 0)
+    const endOfDay = new Date(startOfDay)
+    endOfDay.setDate(endOfDay.getDate() + 1)
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+    const startWeek = new Date(now)
+    startWeek.setDate(now.getDate() - 3)
+    startWeek.setHours(0, 0, 0, 0)
+
+    const endWeek = new Date(now)
+    endWeek.setDate(now.getDate() + 3)
+    endWeek.setHours(0, 0, 0, 0)
+
+    const [
+      totalToday,
+      totalClients,
+      monthClients,
+      totalClientsBeforeThisMonth,
+      monthlyRevenueRaw,
+      lastMonthRevenueRaw,
+      canceledCount,
+      totalMonthAppointments,
+      lastMonthCanceledCount,
+      lastMonthAppointments,
+      weekStats,
+      topServices,
+      appointments,
+      revenueLast6MonthsRaw
+    ] = await Promise.all([
+      prisma.appointment.count({
+        where: {
+          company_id: id,
+          start_time: { gte: startOfDay, lt: endOfDay },
+        },
+      }),
+
+      prisma.appointment.findMany({
+        where: { company_id: id },
+        select: { client_id: true },
+        distinct: ["client_id"],
+      }),
+
+      prisma.appointment.findMany({
+        where: {
+          company_id: id,
+          start_time: {
+            gte: startOfMonth,
+            lt: endOfMonth,
+          },
+        },
+        select: { client_id: true },
+        distinct: ["client_id"],
+      }),
+
+      prisma.appointment.findMany({
+        where: {
+          company_id: id,
+          start_time: {
+            lt: startOfMonth,
+          },
+        },
+        select: { client_id: true },
+        distinct: ["client_id"],
+      }),
+
+      prisma.$queryRaw`
+        SELECT COALESCE(SUM(s.price), 0) as total
+        FROM appointments a
+        JOIN services s ON s.id = a.service_id
+        WHERE a.company_id = ${id}
+          AND a.start_time >= ${startOfMonth}
+          AND a.start_time < ${endOfMonth}
+          AND a.status = 'COMPLETED'
+      `,
+
+      prisma.$queryRaw`
+        SELECT COALESCE(SUM(s.price), 0) as total
+        FROM appointments a
+        JOIN services s ON s.id = a.service_id
+        WHERE a.company_id = ${id}
+          AND a.start_time >= ${startOfLastMonth}
+          AND a.start_time < ${endOfLastMonth}
+          AND a.status = 'COMPLETED'
+      `,
+
+      prisma.appointment.count({
+        where: {
+          company_id: id,
+          start_time: { gte: startOfMonth, lt: endOfMonth },
+          status: "CANCELED",
+        },
+      }),
+
+      prisma.appointment.count({
+        where: {
+          company_id: id,
+          start_time: { gte: startOfMonth, lt: endOfMonth },
+        },
+      }),
+
+      prisma.appointment.count({
+        where: {
+          company_id: id,
+          start_time: { gte: startOfLastMonth, lt: endOfLastMonth },
+          status: "CANCELED",
+        },
+      }),
+
+      prisma.appointment.count({
+        where: {
+          company_id: id,
+          start_time: { gte: startOfLastMonth, lt: endOfLastMonth },
+        },
+      }),
+
+      prisma.$queryRaw`
+        WITH days AS (
+          SELECT generate_series(
+            ${startWeek}::date,
+            ${endWeek}::date,
+            interval '1 day'
+          )::date as date
+        )
+        SELECT
+          EXTRACT(DOW FROM d.date) as dow,
+          d.date,
+          COALESCE(COUNT(a.id), 0)::int as appointments
+        FROM days d
+        LEFT JOIN appointments a
+          ON DATE(a.start_time) = d.date
+          AND a.company_id = ${id}
+        GROUP BY d.date
+        ORDER BY d.date
+      `,
+
+      prisma.$queryRaw`
+        SELECT s.name, COUNT(a.id)::int as total
+        FROM appointments a
+        JOIN services s ON s.id = a.service_id
+        WHERE a.company_id = ${id}
+        GROUP BY s.name
+        ORDER BY total DESC
+        LIMIT 5
+      `,
+
+      prisma.appointment.findMany({
+        where: {
+          company_id: id,
+          start_time: { gte: now },
+        },
+        orderBy: { start_time: "asc" },
+        take: 5,
+        include: {
+          service: true,
+          client: true,
+        },
+      }),
+
+      prisma.$queryRaw`
+        SELECT
+          TO_CHAR(a.start_time, 'YYYY-MM') as month,
+          COALESCE(SUM(s.price), 0)::float as total
+        FROM appointments a
+        JOIN services s ON s.id = a.service_id
+        WHERE a.company_id = ${id}
+          AND a.start_time >= NOW() - INTERVAL '5 months'
+          AND a.status = 'COMPLETED'
+        GROUP BY month
+        ORDER BY month
+      `
+    ])
+
+    function calcPercentage(current, previous) {
+      if (previous === 0) return current > 0 ? 100 : 0
+      return ((current - previous) / previous) * 100
+    }
+
+    const monthlyRevenue = Number(monthlyRevenueRaw[0]?.total || 0)
+    const lastMonthRevenue = Number(lastMonthRevenueRaw[0]?.total || 0)
+
+    const cancelRate =
+      totalMonthAppointments > 0
+        ? (canceledCount / totalMonthAppointments) * 100
+      : 0
+
+    const lastMonthCancelRate =
+      lastMonthAppointments > 0
+        ? (lastMonthCanceledCount / lastMonthAppointments) * 100
+      : 0
+
+    const clientsPercentage = calcPercentage(
+      totalClients.length,
+      totalClientsBeforeThisMonth.length
+    )
+
+    const revenuePercentage = calcPercentage(
+      monthlyRevenue,
+      lastMonthRevenue
+    )
+
+    const cancelPercentage = calcPercentage(
+      cancelRate,
+      lastMonthCancelRate
+    )
+
+    const nextAppointments = appointments.map((a) => ({
+      id: String(a.id),
+      clientName: a.client.name,
+      service: a.service.name,
+      time: a.start_time.toISOString(),
+      status:
+        a.status === "CONFIRMED"
+          ? "confirmed"
+          : a.status === "PENDING"
+          ? "pending"
+          : "cancelled",
+    }))
+
+    const revenueLastMonths = revenueLast6MonthsRaw.map((item) => ({
+      month: item.month,
+      total: Number(item.total),
+    }))
+
+    const dashboard = {
+      totalToday,
+      totalClients: totalClients.length,
+      monthClients: monthClients.length,
+      monthlyRevenue,
+      cancelRate,
+      clientsPercentage,
+      revenuePercentage,
+      cancelPercentage,
+      revenueLastMonths,
+      weekStats,
+      topServices,
+      nextAppointments,
+    }
+
+    return { dashboard }
   }
 }
