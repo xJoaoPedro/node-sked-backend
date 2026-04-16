@@ -301,7 +301,7 @@ Utilizada para configurar os horários bloqueados de funcionários
   "legal_name": "nome legal",
   "fantasy_name": "nome fantasia",
   "cnpj": "12391239123",
-  "email": "exemplo@exemplo.com.br",
+  "email": "exemplo@exemplo.com",
   "password": "123456",
   "phone": "51998557211"
 }</code></pre>
@@ -412,6 +412,78 @@ Utilizada para configurar os horários bloqueados de funcionários
 
   <tr>
     <td><code>DELETE /api/users/:id</code></td>
+    <td>No Body</td>
+    <td>204 No Content</td>
+  </tr>
+</table>
+
+### Empresas
+<table>
+  <tr>
+    <th>Endpoint</th>
+    <th>Body</th>
+    <th>Response</th>
+  </tr>
+  <tr>
+    <td><code>GET /api/companies</code></td>
+    <td>No Body</td>
+    <td><pre><code>{
+	"message": "Consulta realizada com sucesso!",
+	"data": [
+		{
+			"id": 1,
+			"legal_name": "nome legal",
+			"fantasy_name": "nome fantasia",
+			"cnpj": "12391239123",
+			"email": "exemplo@exemplo.com",
+			"password": "$2b$10$CC.DCPVDQ5X76go3fGXce",
+			"phone": "51998557211",
+			"interval_slot": 15,
+			"plan": "FREE",
+			"status": "PENDING",
+			"approve_date": null,
+			"created_at": "2026-04-16T02:09:07.800Z",
+			"updated_at": "2026-04-16T02:09:07.800Z"
+		}
+	]
+}</code></pre></td>
+  </tr>
+
+  <tr>
+    <td><code>GET /api/companies/:id</code></td>
+    <td>No Body</td>
+    <td><pre><code>{
+	"message": "Empresa encontrada com sucesso!",
+	"data": {
+		"id": 4,
+		"legal_name": "nome legal",
+		"fantasy_name": "nome fantasia",
+		"cnpj": "12391239123",
+		"email": "exemplo@exemplo.com",
+		"password": "$2b$10$CC.DCPVDQ5X76go3fGXce",
+		"phone": "51998557211",
+		"interval_slot": 15,
+		"plan": "FREE",
+		"status": "PENDING",
+		"approve_date": null,
+		"created_at": "2026-04-16T02:09:07.800Z",
+		"updated_at": "2026-04-16T02:09:07.800Z"
+	}
+}</code></pre></td>
+  </tr>
+
+  <tr>
+    <td><code>PATCH /api/companies/:id</code></td>
+    <td>
+      <pre><code>{
+	"legal_name": "Nome legal editado"
+}</code></pre>
+    </td>
+    <td>204 No Content</td>
+  </tr>
+
+  <tr>
+    <td><code>DELETE /api/companies/:id</code></td>
     <td>No Body</td>
     <td>204 No Content</td>
   </tr>
