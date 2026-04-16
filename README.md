@@ -287,7 +287,7 @@ Utilizada para configurar os horários bloqueados de funcionários
 
 ### Endpoints
 
-#### Rotas de autenticação (sem proteção de tokens JWT)
+### Rotas de autenticação (sem proteção de tokens JWT)
 <table>
   <tr>
     <th>Endpoint</th>
@@ -348,5 +348,71 @@ Utilizada para configurar os horários bloqueados de funcionários
 	"token": "hdasjkdasjkhdfjkdshf",
 	"id": 1
 }</code></pre></td>
+  </tr>
+</table>
+
+### Rotas de API <span p style="color:red">(protegidas com token JWT)</span> 
+
+### Usuário
+<table>
+  <tr>
+    <th>Endpoint</th>
+    <th>Body</th>
+    <th>Response</th>
+  </tr>
+  <tr>
+    <td><code>GET /api/users</code></td>
+    <td>No Body</td>
+    <td><pre><code>{
+	"message": "Consulta realizada com sucesso!",
+	"data": [
+		{
+			"id": 1,
+			"name": "Nome teste",
+			"email": "teste@teste.com",
+			"password": "$2b$10$E3l.LA8dPWE0rbVSh24OtOUB",
+			"phone": "51999999999",
+			"status": "ACTIVE",
+			"last_login": null,
+			"created_at": "2026-04-16T02:25:51.374Z",
+			"updated_at": "2026-04-16T02:25:51.374Z"
+		}
+	]
+}</code></pre></td>
+  </tr>
+
+  <tr>
+    <td><code>GET /api/users/:id</code></td>
+    <td>No Body</td>
+    <td><pre><code>{
+	"message": "Usuário encontrado com sucesso!",
+	"data": {
+		"id": 1,
+		"name": "Nome teste",
+		"email": "teste@teste.com",
+		"password": "$2b$10$E3l.LA8dPWE0rbVSh24OtOUB",
+		"phone": "51999999999",
+		"status": "ACTIVE",
+		"last_login": null,
+		"created_at": "2026-04-16T02:25:51.374Z",
+		"updated_at": "2026-04-16T02:25:51.374Z"
+	}
+}</code></pre></td>
+  </tr>
+
+  <tr>
+    <td><code>PATCH /api/users/:id</code></td>
+    <td>
+      <pre><code>{
+	"name": "Nome editado"
+}</code></pre>
+    </td>
+    <td>204 No Content</td>
+  </tr>
+
+  <tr>
+    <td><code>DELETE /api/users/:id</code></td>
+    <td>No Body</td>
+    <td>204 No Content</td>
   </tr>
 </table>

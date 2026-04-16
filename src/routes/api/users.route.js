@@ -10,9 +10,6 @@ usersRouter.get("/", controller.findAll);
 // GET /id
 usersRouter.get("/:id", controller.findOne);
 
-// POST /
-usersRouter.post("/", controller.create);
-
 // PATCH /:id
 usersRouter.patch("/:id", controller.update);
 
