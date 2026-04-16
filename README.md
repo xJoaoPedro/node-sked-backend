@@ -1,10 +1,8 @@
-
-
-# Sked API
+<p align="center"><img src="src/assets/readme.svg" width="400" alt="Sked API"></p>
 
 # Requisitos e instalação
 
-### Requisitos  
+### Requisitos
 
 <p align="center">
 <a href="https://nodejs.org/pt">
@@ -12,56 +10,110 @@
 &nbsp
 <a href="https://docs.npmjs.com/downloading-and-installing-node-js-and-npm">
 <img src="https://img.shields.io/badge/NPM-11.9.*-CC3534?logo=npm&logoColor=FFF" alt="npm 11.9.*"></a>
+&nbsp
+<a href="https://www.postgresql.org/download/">
+<img src="https://img.shields.io/badge/PostgreSQL-16.13.*-4169E1?logo=postgresql&logoColor=FFF" alt="Postgres 16.13.*"></a>
 
 
 ### Instalação e teste
 
-Após clonar o repositório e certificar que todos os programas acima estão instalados, você deve clonar o arquivo `.env.example`, renomear para `.env` e preencher conforme seus endereços locais, e rodar os seguintes comandos no seu terminal:
+Para rodar este projeto é necessário ter um banco de dados Postgres instalado e configurado, caso você já tenha um banco configurado, pode pular esta sessão e ir direto para a <a href="#projConfig">configuração do projeto</a>.
+
+<br />
+
+#### Configuração do banco
+
+Para a configuração padrão, o banco utilizado é o PostgreSQL, outro banco pode ser utilizado, mas poderão ocorrer inconsistências.
+
+Após fazer o download do banco de acordo com a <a href="https://www.postgresql.org/download/">documentação</a>, é necessário acessá-lo para configurá-lo.
+
+Comandos de conexão:
 ```
+# Windows
+psql -U postgres
+
+# Linux
+sudo -u postgres psql
+```
+
+Após, criaremos o banco:
+```
+# "bancoExemplo" será o nome do nosso banco
+CREATE DATABASE bancoExemplo;
+
+# "meuuser" será o usuário e "123456" será a senha 
+CREATE USER meuuser WITH PASSWORD '123456';
+ALTER DATABASE meubanco OWNER TO meuuser;
+```
+
+Com isso, temos o banco configurado!
+
+e devem ser colocados no .env os valores
+
+`database` - `bancoExemplo`
+
+`username` - `meuuser`
+
+`password` - `123456`
+
+`host` - `postgres`
+
+`Porta` - `5432`
+
+<br />
+
+<div id="projConfig">
+
+#### Configuração do projeto
+
+Após a configuração do banco, a clonagem do repositório e certificar que todos os requisitos necessários estão atendidos, você deve clonar o arquivo `.env.example`, renomear para `.env` e preencher conforme suas variáveis locais, e rodar os seguintes comandos no seu terminal:
+
+<p style="color:yellow">
+  ⚠️ Atenção: É expressamente necessário ter os endereços no .env preenchidos antes de rodar os comandos, caso contrário, terá que preencher e rodar os comandos novamente.
+</p>
+
+```
+# instalar dependências do projeto
 npm install
 
-                         demais comandos aqui
+# gerar client do prisma
+npx prisma generate
+
+# rodar migrations
+npx prisma migrate deploy
 
 ```
 
-Agora com o projeto configurado, basta rodar o seguinte comando:
-```
-npm run watch
-```
+Agora com o projeto configurado, basta rodar `npm run dev`
 
 E pronto! basta acessar seu `localhost:3000` (ou a porta configurada no `.env`) nos endpoints da API para testar o projeto!
 
-<br>
-
-# Sobre o projeto e models
-
-Criada durante a cadeira de _Programação Web_, a aplicação trata-se de um CRUD temático sobre Pokémon, que permite a criação, leitura, atualização e exclusão de informações sobre o mundo Pokémon. Através desta aplicação web, é possível gerenciar as informações de suas entidades conforme:
-- **Pokémon -** nome, tipo, poder, treinador e imagem.
-- **Treinador -** nome e imagem. 
-
-<div align="center">
-<img src="assets/readme/readme2.gif" alt="ash e pikachu caminhando" height="60">
-</div>
-
-## Tecnologias usadas
-
-
-
-O sistema foi desenvolvido utilizando o framework _[Laravel](https://laravel.com)_, em uma arquitetura MVC (Model, View e Controller) para gerenciar as informações e utilizando o _[Blade](https://laravel.com/docs/11.x/blade)_ junto do framework _[Tailwind](https://tailwindcss.com/)_ para criação e estilização das views.
-
-<div align="center">
-<img src="https://img.shields.io/badge/Laravel-FF2D20?logo=laravel&logoColor=FFF" alt="logo Laravel" height="20"> 
-<img src="https://img.shields.io/badge/Tailwind-06B6D4?logo=tailwindcss&logoColor=FFF" alt="logo tailwind" height="20">
-</div>
-
-## Autenticação e criação de perfil
-
-<img src="assets/readme/readme3.gif" width="70" align="right" alt="ash e pikachu">
-
-<p align="left">
-
-Além do CRUD completo de ambas entidades, a aplicação ainda implementa funcionalidades de log in e registro através do _[Laravel Breeze](https://laravel.com/docs/11.x/starter-kits#laravel-breeze)_, podendo visualizar os Pokémon e treinadores criados somente se estiver logado no sistema.
+<p style="color:red">
+  ⚠️ Atenção: Grande parte das rotas são protegidas com token JWT, então será necessário gerar um token e enviá-lo junto na requisição para testar.
 </p>
+</div>
+
+<br />
+
+### Tecnologias usadas
+
+O sistema foi desenvolvido utilizando _[Node.js](https://nodejs.org/pt)_, com autenticação baseada em JSON Web Token _[(JWT)](https://www.jwt.io/)_ para controle seguro de acesso às rotas protegidas. Para a camada de persistência de dados, foi utilizado o ORM _[Prisma](https://www.prisma.io/orm)_, responsável pela comunicação com o banco de dados e mapeamento das entidades.
+
+A aplicação segue uma arquitetura em camadas, organizada em routes, controllers, services, models e validators, garantindo uma clara separação de responsabilidades: as routes definem os endpoints, os controllers lidam com as requisições e respostas, os services concentram as regras de negócio, os models representam os dados e os validators asseguram a integridade das informações recebidas.
+
+<div align="center">
+<a href="https://nodejs.org/pt"><img src="https://img.shields.io/badge/Node.js-5FA04E?logo=node.js&logoColor=FFF" alt="logo Node" height="20" /></a>
+<a href="https://www.jwt.io/"><img src="https://img.shields.io/badge/JWT-000000?logo=jsonwebtokens&logoColor=FFF" alt="logo Node" height="20" /></a>
+<a href="https://www.prisma.io/orm"><img src="https://img.shields.io/badge/Prisma-2D3748?logo=prisma&logoColor=FFF" alt="logo tailwind" height="20" /></a>
+</div>
+
+<br />
+
+# Models e Endpoints
+
+### Models
+
+Os models são feitos utilizando o Prisma ORM que pode ser configurado de acordo com a necessidade, mas a configuração padrão das models é a seguinte:
 
 ### 👤 Usuários (users)
 
@@ -100,6 +152,7 @@ Além do CRUD completo de ambas entidades, a aplicação ainda implementa funcio
 
 
 ### 🔗 Empresas-Usuários (companies_users)
+Tabela pivô de usuários e empresas
 
 | Campo | Tipo | Descrição | Constraints |
 | ----- | ---- | --------- | ----------- |
@@ -134,6 +187,7 @@ Constraints compostas:
 
 
 ### 🕒 Aberturas de agenda (schedule_openings)
+Utilizada para configurar os horários disponíveis de funcionários
 
 | Campo | Tipo | Descrição | Constraints |
 | ----- | ---- | --------- | ----------- |
@@ -149,6 +203,7 @@ Constraints compostas:
 
 
 ### 🚫 Bloqueios de agenda (schedule_blocks)
+Utilizada para configurar os horários bloqueados de funcionários
 
 | Campo | Tipo | Descrição | Constraints |
 | ----- | ---- | --------- | ----------- |
@@ -227,3 +282,71 @@ Constraints compostas:
 | paid |	Boolean |	Indica se está pago |	NOT NULL, DEFAULT (false) |
 | created_at | DateTime | Data de criação | NOT NULL, DEFAUT (now()) |
 | updated_at | DateTime | Última atualização | NOT NULL, AUTO UPDATE |
+
+<br />
+
+### Endpoints
+
+#### Rotas de autenticação (sem proteção de tokens JWT)
+<table>
+  <tr>
+    <th>Endpoint</th>
+    <th>Body</th>
+    <th>Response</th>
+  </tr>
+  <tr>
+    <td><code>POST /auth/companies/register</code></td>
+    <td>
+      <pre><code>{
+  "legal_name": "nome legal",
+  "fantasy_name": "nome fantasia",
+  "cnpj": "12391239123",
+  "email": "exemplo@exemplo.com.br",
+  "password": "123456",
+  "phone": "51998557211"
+}</code></pre>
+    </td>
+    <td>204 No Content</td>
+  </tr>
+
+  <tr>
+    <td><code>POST /auth/companies/login</code></td>
+    <td>
+      <pre><code>{
+  "email": "exemplo@exemplo.com",
+  "password": "123456",
+}</code></pre>
+    </td>
+    <td><pre><code>{
+	"token": "dksljadsjkadkljsajkdls",
+	"id": 1
+}</code></pre></td>
+  </tr>
+
+  <tr>
+    <td><code>POST /auth/users/register</code></td>
+    <td>
+      <pre><code>{
+  "name": "Nome teste",
+  "email": "teste@teste.com",
+  "password": "123456",
+  "phone": "51999999999"
+}</code></pre>
+    </td>
+    <td>204 No Content</td>
+  </tr>
+
+  <tr>
+    <td><code>POST /auth/users/login</code></td>
+    <td>
+      <pre><code>{
+  "email": "teste@teste.com",
+  "password": "123456",
+}</code></pre>
+    </td>
+    <td><pre><code>{
+	"token": "hdasjkdasjkhdfjkdshf",
+	"id": 1
+}</code></pre></td>
+  </tr>
+</table>

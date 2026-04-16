@@ -30,7 +30,7 @@ export default class AuthController {
   async userRegister(req, res) {
     parse(req.body, res, "user");
 
-    await userService.userRegister(req.body);
+    await userService.create(req.body);
 
     res.status(204).json();
   }
@@ -46,7 +46,7 @@ export default class AuthController {
   async userLogin(req, res) {
     parse(req.body, res, "user");
 
-    const data = await userService.userLogin(req.body, res);
+    const data = await userService.login(req.body, res);
 
     return res.json(data);
   }
