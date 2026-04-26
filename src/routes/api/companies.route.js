@@ -13,9 +13,6 @@ companiesRouter.get("/:id", controller.findOne);
 // GET /id/data (todos dados de empresa)
 companiesRouter.get('/:id/data', controller.getAllData);
 
-// POST /
-companiesRouter.post("/", controller.create);
-
 // PATCH /:id
 companiesRouter.patch("/:id", controller.update);
 

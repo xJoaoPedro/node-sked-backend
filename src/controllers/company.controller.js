@@ -39,21 +39,6 @@ export default class CompanyController {
     });
   }
 
-  async create(req, res) {
-    const parsed = createCompanyValidator.safeParse(req.body);
-
-    if (!parsed.success) {
-      return res.status(400).json({
-        message: "Dados inválidos",
-        errors: JSON.parse(parsed.error),
-      });
-    }
-
-    await service.create(req.body);
-
-    res.status(204).json();
-  }
-
   async update(req, res) {
     const parsed = updateCompanyValidator.safeParse(req.body);
 

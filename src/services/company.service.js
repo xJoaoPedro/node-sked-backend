@@ -90,6 +90,17 @@ export class CompanyService {
   }
 
   async getAllData(id) {
+    const dashboard = await this.getDashboard(id)   
+
+    const dailySchedules = await this.getDailySchedules(id)
+
+    return {
+      dashboard,
+      dailySchedules
+    }
+  }
+
+  async getDashboard(id) {
     const now = new Date()
 
     const startOfDay = new Date(now)
@@ -246,9 +257,9 @@ export class CompanyService {
         where: {
           company_id: id,
           start_time: { gte: now },
+          status: { in: ['PENDING', 'CONFIRMED', 'CANCELED']},
         },
         orderBy: { start_time: "asc" },
-        take: 5,
         include: {
           service: true,
           client: true,
@@ -307,12 +318,7 @@ export class CompanyService {
       clientName: a.client.name,
       service: a.service.name,
       time: a.start_time.toISOString(),
-      status:
-        a.status === "CONFIRMED"
-          ? "confirmed"
-          : a.status === "PENDING"
-          ? "pending"
-          : "cancelled",
+      status: a.status.toLowerCase(),
     }))
 
     const revenueLastMonths = revenueLast6MonthsRaw.map((item) => ({
@@ -320,7 +326,7 @@ export class CompanyService {
       total: Number(item.total),
     }))
 
-    const dashboard = {
+    return {
       totalToday,
       totalClients: totalClients.length,
       monthClients: monthClients.length,
@@ -334,7 +340,14 @@ export class CompanyService {
       topServices,
       nextAppointments,
     }
+  }
 
-    return { dashboard }
+  async getDailySchedules(id) {
+    const now = new Date()
+
+    const startOfDay = new Date(now)
+    startOfDay.setHours(0, 0, 0, 0)
+    const endOfDay = new Date(startOfDay)
+    endOfDay.setDate(endOfDay.getDate() + 1)
   }
 }

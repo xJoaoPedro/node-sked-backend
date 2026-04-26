@@ -349,6 +349,12 @@ Os models são feitos utilizando o Prisma ORM, que pode ser configurado de acord
   </tr>
 
   <tr>
+    <td><code>GET /api/companies/:id/data</code></td>
+    <td>No Body</td>
+    <td><pre><code>//// atualizar com a response certa</code></pre></td>
+  </tr>
+
+  <tr>
     <td><code>PATCH /api/companies/:id</code></td>
     <td>
       <pre><code>{
