@@ -20,6 +20,31 @@ export class AppointmentService {
     return appointment ?? null;
   }
 
+  async getAppointmentsByDate(id, date) {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        company_id: id,
+        start_time: {
+          gte: start,
+          lte: end,
+        },
+      },
+      orderBy: { start_time: "asc" },
+      include: {
+        service: true,
+        client: true,
+      },
+    });
+
+    return appointments;
+  }
+
   async create(appointment) {
     const {
       company_id,

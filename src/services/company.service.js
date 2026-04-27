@@ -343,11 +343,37 @@ export class CompanyService {
   }
 
   async getDailySchedules(id) {
-    const now = new Date()
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
 
-    const startOfDay = new Date(now)
-    startOfDay.setHours(0, 0, 0, 0)
-    const endOfDay = new Date(startOfDay)
-    endOfDay.setDate(endOfDay.getDate() + 1)
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        company_id: id,
+        start_time: { gte: startOfDay, lte: endOfDay, },
+      },
+      orderBy: { start_time: "asc" },
+      include: {
+        service: true,
+        client: true,
+      },
+    });
+
+    const professionals = await prisma.companyUser.findMany({
+      where: {
+        company_id: id,
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    return {
+      id,
+      appointments,
+      professionals
+    }
   }
 }

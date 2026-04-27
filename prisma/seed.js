@@ -18,6 +18,14 @@ function getRandomItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// 🔥 slots de 30min (06:00 → 21:30)
+const TIME_SLOTS = Array.from({ length: (22 - 6) * 2 }, (_, i) => {
+  const hour = 6 + Math.floor(i / 2);
+  const minute = i % 2 === 0 ? 0 : 30;
+  return { hour, minute };
+});
+
+// 🔥 nova função corrigida
 function generateAppointment({ date, services, employees, clients, companyId, isFuture }) {
   const service = getRandomItem(services);
   const employee = getRandomItem(employees);
@@ -25,18 +33,21 @@ function generateAppointment({ date, services, employees, clients, companyId, is
 
   const start = new Date(date);
 
-  const hour = randomBetween(9, 18);
-  const minute = [0, 15, 30, 45][Math.floor(Math.random() * 4)];
-
-  start.setHours(hour, minute, 0, 0);
+  const slot = getRandomItem(TIME_SLOTS);
+  start.setHours(slot.hour, slot.minute, 0, 0);
 
   const end = new Date(start);
   end.setMinutes(end.getMinutes() + service.duration_minutes);
 
+  // ❌ bloqueia passar das 22h
+  if (end.getHours() > 22 || (end.getHours() === 22 && end.getMinutes() > 0)) {
+    return null;
+  }
+
   let status;
 
   if (isFuture) {
-    status = Math.random() > 0.2 ? "CONFIRMED" : "CANCELED";
+    status = Math.random() > 0.2 ? "CONFIRMED" : "PENDING";
   } else {
     const rand = Math.random();
     if (rand < 0.7) status = "COMPLETED";
@@ -61,7 +72,7 @@ function generateAppointment({ date, services, employees, clients, companyId, is
 async function main() {
   const password = await bcrypt.hash("123456", 10);
 
-  // Company + Admin
+  // Company
   const company = await prisma.company.create({
     data: {
       legal_name: "Empresa LTDA",
@@ -73,6 +84,7 @@ async function main() {
     },
   });
 
+  // Admin
   const admin = await prisma.user.create({
     data: {
       name: "Admin",
@@ -128,16 +140,16 @@ async function main() {
     )
   );
 
-  // Services
+  // 🔥 Services (compatíveis com 30min)
   const services = await Promise.all([
     prisma.service.create({
       data: { company_id: company.id, name: "Corte de cabelo", duration_minutes: 30, price: 50 },
     }),
     prisma.service.create({
-      data: { company_id: company.id, name: "Barba", duration_minutes: 20, price: 30 },
+      data: { company_id: company.id, name: "Barba", duration_minutes: 30, price: 30 },
     }),
     prisma.service.create({
-      data: { company_id: company.id, name: "Corte + Barba", duration_minutes: 50, price: 70 },
+      data: { company_id: company.id, name: "Corte + Barba", duration_minutes: 60, price: 70 },
     }),
     prisma.service.create({
       data: { company_id: company.id, name: "Progressiva", duration_minutes: 120, price: 200 },
@@ -150,9 +162,7 @@ async function main() {
   const appointments = [];
   const today = new Date();
 
-  // ---------------------
-  // 1. Últimos 6 meses
-  // ---------------------
+  // Últimos 6 meses
   for (let m = 0; m < 6; m++) {
     const baseDate = new Date();
     baseDate.setMonth(today.getMonth() - m);
@@ -177,23 +187,21 @@ async function main() {
       const count = randomBetween(5, 12);
 
       for (let i = 0; i < count; i++) {
-        appointments.push(
-          generateAppointment({
-            date,
-            services,
-            employees,
-            clients,
-            companyId: company.id,
-            isFuture: false,
-          })
-        );
+        const apt = generateAppointment({
+          date,
+          services,
+          employees,
+          clients,
+          companyId: company.id,
+          isFuture: false,
+        });
+
+        if (apt) appointments.push(apt);
       }
     }
   }
 
-  // ---------------------
-  // 2. Últimos 3 dias
-  // ---------------------
+  // Últimos 3 dias
   for (let d = 1; d <= 3; d++) {
     const date = new Date();
     date.setDate(today.getDate() - d);
@@ -201,43 +209,34 @@ async function main() {
     const count = randomBetween(10, 20);
 
     for (let i = 0; i < count; i++) {
-      appointments.push(
-        generateAppointment({
-          date,
-          services,
-          employees,
-          clients,
-          companyId: company.id,
-          isFuture: false,
-        })
-      );
-    }
-  }
-
-  // ---------------------
-  // 3. HOJE (🔥 novo)
-  // ---------------------
-  const hours = [9, 10, 11, 13, 14, 15, 16, 17];
-
-  hours.forEach((hour) => {
-    const date = new Date(today);
-    date.setHours(hour, 0, 0, 0);
-
-    appointments.push(
-      generateAppointment({
+      const apt = generateAppointment({
         date,
         services,
         employees,
         clients,
         companyId: company.id,
         isFuture: false,
-      })
-    );
-  });
+      });
 
-  // ---------------------
-  // 4. Próximos 3 dias
-  // ---------------------
+      if (apt) appointments.push(apt);
+    }
+  }
+
+  // 🔥 HOJE
+  for (let i = 0; i < 12; i++) {
+    const apt = generateAppointment({
+      date: today,
+      services,
+      employees,
+      clients,
+      companyId: company.id,
+      isFuture: true,
+    });
+
+    if (apt) appointments.push(apt);
+  }
+
+  // Próximos 3 dias
   for (let d = 1; d <= 3; d++) {
     const date = new Date();
     date.setDate(today.getDate() + d);
@@ -245,43 +244,17 @@ async function main() {
     const count = randomBetween(10, 20);
 
     for (let i = 0; i < count; i++) {
-      appointments.push(
-        generateAppointment({
-          date,
-          services,
-          employees,
-          clients,
-          companyId: company.id,
-          isFuture: true,
-        })
-      );
+      const apt = generateAppointment({
+        date,
+        services,
+        employees,
+        clients,
+        companyId: company.id,
+        isFuture: true,
+      });
+
+      if (apt) appointments.push(apt);
     }
-  }
-
-  // ---------------------
-  // 5. Próximos fixos
-  // ---------------------
-  for (let i = 1; i <= 5; i++) {
-    const date = new Date();
-    date.setDate(today.getDate() + i);
-
-    const start = new Date(date);
-    start.setHours(10, 0, 0, 0);
-
-    const service = services[0];
-
-    const end = new Date(start);
-    end.setMinutes(end.getMinutes() + service.duration_minutes);
-
-    appointments.push({
-      company_id: company.id,
-      service_id: service.id,
-      employee_id: employees[0].id,
-      client_id: clients[i].id,
-      start_time: start,
-      end_time: end,
-      status: "CONFIRMED",
-    });
   }
 
   // Save
@@ -289,7 +262,7 @@ async function main() {
     data: appointments,
   });
 
-  console.log("🌱 Seed COMPLETO com agendamentos HOJE!");
+  console.log("🌱 Seed COMPLETO com grade de 30min (06h–22h)!");
 }
 
 main()
