@@ -83,6 +83,23 @@ export default class CompanyController {
       message: "Empresa encontrada com sucesso!",
       data: data,
     });
-    
+  }
+
+  async getAppointments(req, res) {
+    const id = Number(req.params.id);
+    const { page = 1, limit = 50, ...filters } = req.query;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const appointments = await service.getAppointments(id, page, limit, filters);
+
+    res.status(200).json({
+      message: "Agendamentos encontrados com sucesso!",
+      data: appointments,
+    });
   }
 }

@@ -10,8 +10,13 @@ companiesRouter.get("/", controller.findAll);
 // GET /id
 companiesRouter.get("/:id", controller.findOne);
 
+// TODO DOCUMENTAR ESSA BOMBA TBM
 // GET /id/data (todos dados de empresa)
 companiesRouter.get('/:id/data', controller.getAllData);
+
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/appointments (todos os agendamentos de uma empresa)
+companiesRouter.get('/:id/appointments', controller.getAppointments);
 
 // PATCH /:id
 companiesRouter.patch("/:id", controller.update);

@@ -94,9 +94,15 @@ export class CompanyService {
 
     const dailySchedules = await this.getDailySchedules(id)
 
+    const appointments = await this.getAppointments(id)
+
+    const services = await this.getServices(id)
+
     return {
       dashboard,
-      dailySchedules
+      dailySchedules,
+      appointments,
+      services
     }
   }
 
@@ -375,5 +381,104 @@ export class CompanyService {
       appointments,
       professionals
     }
+  }
+
+  async getAppointments(id, page = 1, limit = 50, filters = {}) {
+    let hasFilter = false;
+
+    const where = {
+      company_id: id,
+    };
+
+    if (filters.id) {
+      hasFilter = true;
+      
+      where.id = {
+        equals: Number(filters.id),
+      };
+    }
+
+    if (filters.date) {
+      hasFilter = true;
+      const baseDate = filters.date;
+
+      let start = new Date(`${baseDate}T00:00:00-03:00`);
+      let end = new Date(`${baseDate}T23:59:59-03:00`);
+
+      if (filters.timeStart) {
+        const [h, m] = filters.timeStart.split(':');
+        start = new Date(`${baseDate}T${h}:${m}:00-03:00`);
+      }
+
+      if (filters.timeEnd) {
+        const [h, m] = filters.timeEnd.split(':');
+        end = new Date(`${baseDate}T${h}:${m}:59-03:00`);
+      }
+
+      where.start_time = {
+        gte: start,
+        lte: end,
+      };
+    }
+
+    if (filters.service) {
+      hasFilter = true;
+
+      where.service = {
+        name: filters.service,
+      };
+    }
+
+    if (filters.client) {
+      hasFilter = true;
+
+      where.client = {
+        name: {
+          contains: filters.client,
+          mode: 'insensitive',
+        },
+      };
+    }
+
+    if (filters.status) {
+      hasFilter = true;
+
+      where.status = filters.status.toUpperCase();
+    }
+
+    page = hasFilter ? 1 : Number(page);
+
+    const [appointments, total] = await Promise.all([
+      prisma.appointment.findMany({
+        where,
+        skip: (page - 1) * Number(limit),
+        take: Number(limit),
+        include: {
+          client: true,
+          service: true,
+          employee: true,
+        },
+      }),
+      prisma.appointment.count({ where }),
+    ]);
+
+    return {
+      data: appointments,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+
+    };
+  }
+
+  async getServices(id) {
+    const services = await prisma.service.findMany({
+      where: {
+        company_id: id,
+      },
+    });
+
+    return services;
   }
 }
