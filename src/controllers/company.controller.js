@@ -102,4 +102,22 @@ export default class CompanyController {
       data: appointments,
     });
   }
+
+  async getCancellations(req, res) {
+    const id = Number(req.params.id);
+    const { page = 1, limit = 50 } = req.query;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const cancellations = await service.getCancellations(id, page, limit);
+
+    res.status(200).json({
+      message: "Cancelamentos encontrados com sucesso!",
+      data: cancellations,
+    });
+  }
 }

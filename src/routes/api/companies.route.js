@@ -18,6 +18,10 @@ companiesRouter.get('/:id/data', controller.getAllData);
 // GET /:id/appointments (todos os agendamentos de uma empresa)
 companiesRouter.get('/:id/appointments', controller.getAppointments);
 
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/cancellations (todos os cancelamentos de uma empresa)
+companiesRouter.get('/:id/cancellations', controller.getCancellations);
+
 // PATCH /:id
 companiesRouter.patch("/:id", controller.update);
 

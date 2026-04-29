@@ -25,6 +25,16 @@ const TIME_SLOTS = Array.from({ length: (22 - 6) * 2 }, (_, i) => {
   return { hour, minute };
 });
 
+// 🔥 Motivos de cancelamento
+const CANCEL_REASONS = [
+  "NO_SHOW",
+  "SCHEDULE_CONFLICT",
+  "ILLNESS",
+  "EMERGENCY",
+  "PROFESSIONAL_UNAVAILABLE",
+  "OTHER",
+];
+
 // 🔥 nova função corrigida
 function generateAppointment({ date, services, employees, clients, companyId, isFuture }) {
   const service = getRandomItem(services);
@@ -45,13 +55,17 @@ function generateAppointment({ date, services, employees, clients, companyId, is
   }
 
   let status;
+  let cancel_reason = null;
 
   if (isFuture) {
     status = Math.random() > 0.2 ? "CONFIRMED" : "PENDING";
   } else {
     const rand = Math.random();
     if (rand < 0.7) status = "COMPLETED";
-    else if (rand < 0.9) status = "CANCELED";
+    else if (rand < 0.9) {
+      status = "CANCELED";
+      cancel_reason = getRandomItem(CANCEL_REASONS);
+    }
     else status = "CONFIRMED";
   }
 
@@ -63,6 +77,7 @@ function generateAppointment({ date, services, employees, clients, companyId, is
     start_time: start,
     end_time: end,
     status,
+    cancel_reason,
   };
 }
 

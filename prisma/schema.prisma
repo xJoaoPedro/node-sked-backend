@@ -141,6 +141,7 @@ model Appointment {
   end_time     DateTime           @db.Timestamptz(6)
   observations String?            @db.VarChar(255)
   status       appointment_status @default(PENDING)
+  cancel_reason cancel_reason?
   created_at   DateTime           @default(now()) @db.Timestamptz(6)
   updated_at   DateTime           @updatedAt @db.Timestamptz(6)
   client       User               @relation("client", fields: [client_id], references: [id], onDelete: Cascade)
@@ -213,6 +214,15 @@ enum appointment_status {
   COMPLETED
   CANCELED
   NO_SHOW
+}
+
+enum cancel_reason {
+  NO_SHOW
+  SCHEDULE_CONFLICT
+  ILLNESS
+  EMERGENCY
+  PROFESSIONAL_UNAVAILABLE
+  OTHER
 }
 
 enum bot_interaction_type_enum {

@@ -83,7 +83,7 @@ export class CompanyService {
           company_id: company.id,
         },
         process.env.JWT_SECRET,
-        { expiresIn: "1d" },
+        { expiresIn: "1h" },
       ),
       id: company.id
     } 
@@ -96,13 +96,23 @@ export class CompanyService {
 
     const appointments = await this.getAppointments(id)
 
+    const cancellations = await this.getInitialCancellations(id)
+
     const services = await this.getServices(id)
 
     return {
       dashboard,
       dailySchedules,
       appointments,
-      services
+      cancellations,
+      // revenue
+      // comissions
+      // reports
+      // inventory
+      services,
+      // professionals
+      // customers
+      // settings
     }
   }
 
@@ -202,7 +212,6 @@ export class CompanyService {
       prisma.appointment.count({
         where: {
           company_id: id,
-          start_time: { gte: startOfMonth, lt: endOfMonth },
           status: "CANCELED",
         },
       }),
@@ -210,7 +219,6 @@ export class CompanyService {
       prisma.appointment.count({
         where: {
           company_id: id,
-          start_time: { gte: startOfMonth, lt: endOfMonth },
         },
       }),
 
@@ -480,5 +488,210 @@ export class CompanyService {
     });
 
     return services;
+  }
+
+  async getInitialCancellations(id) {
+    const now = new Date();
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+    const [
+      totalCancellations,
+      totalAppointments,
+      lostRevenueRaw,
+      cancellationsByMonthRaw,
+      cancellationsByServiceRaw,
+      cancellationsByProfessionalRaw,
+      cancellationsByReasonRaw,
+      recentCancellations
+    ] = await Promise.all([
+      prisma.appointment.count({
+        where: {
+          company_id: id,
+          status: "CANCELED",
+        },
+      }),
+
+      prisma.appointment.count({
+        where: {
+          company_id: id,
+        },
+      }),
+
+      prisma.$queryRaw`
+        SELECT COALESCE(SUM(s.price), 0) as total
+        FROM appointments a
+        JOIN services s ON s.id = a.service_id
+        WHERE a.company_id = ${id}
+          AND a.status = 'CANCELED'
+      `,
+
+      prisma.$queryRaw`
+        SELECT
+          TO_CHAR(a.start_time, 'YYYY-MM') as month,
+          COUNT(a.id)::int as total
+        FROM appointments a
+        WHERE a.company_id = ${id}
+          AND a.status = 'CANCELED'
+          AND a.start_time >= ${sixMonthsAgo}
+        GROUP BY month
+        ORDER BY month
+      `,
+
+      prisma.$queryRaw`
+        SELECT 
+          s.name,
+          COUNT(a.id)::int as total
+        FROM appointments a
+        JOIN services s ON s.id = a.service_id
+        WHERE a.company_id = ${id}
+          AND a.status = 'CANCELED'
+        GROUP BY s.name
+        ORDER BY total DESC
+      `,
+
+      prisma.$queryRaw`
+        SELECT 
+          u.name,
+          COUNT(a.id)::int as cancellations,
+          (SELECT COUNT(*) FROM appointments a2 WHERE a2.employee_id = a.employee_id AND a2.company_id = ${id})::int as total
+        FROM appointments a
+        JOIN users u ON u.id = a.employee_id
+        WHERE a.company_id = ${id}
+          AND a.status = 'CANCELED'
+        GROUP BY u.name, a.employee_id
+        ORDER BY cancellations DESC
+      `,
+
+      prisma.$queryRaw`
+        SELECT 
+          a.cancel_reason as reason,
+          COUNT(a.id)::int as total
+        FROM appointments a
+        WHERE a.company_id = ${id}
+          AND a.status = 'CANCELED'
+          AND a.cancel_reason IS NOT NULL
+        GROUP BY a.cancel_reason
+        ORDER BY total DESC
+      `,
+
+      prisma.appointment.findMany({
+        where: {
+          company_id: id,
+          status: "CANCELED",
+        },
+        orderBy: { id: "asc" },
+        include: {
+          service: true,
+          client: true,
+          employee: true,
+        },
+        take: 50,
+      }),
+    ]);
+
+    const cancelRate = totalAppointments > 0 
+      ? (totalCancellations / totalAppointments) * 100 
+      : 0;
+
+    const lostRevenue = Number(lostRevenueRaw[0]?.total || 0);
+
+    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+    const cancellationsByMonth = cancellationsByMonthRaw.map((item) => {
+      const [year, month] = item.month.split('-');
+      return {
+        month: monthNames[parseInt(month, 10) - 1],
+        year: parseInt(year, 10),
+        total: Number(item.total),
+      };
+    });
+
+    const cancellationsByService = cancellationsByServiceRaw.map((item) => ({
+      service: item.name,
+      total: Number(item.total),
+    }));
+
+    const cancellationsByProfessional = cancellationsByProfessionalRaw.map((item) => {
+      const total = Number(item.total);
+      const cancellations = Number(item.cancellations);
+      return {
+        name: item.name,
+        total,
+        cancellations,
+        rate: total > 0 ? (cancellations / total) * 100 : 0,
+      };
+    });
+
+    const reasonLabels = {
+      NO_SHOW: "Não compareceu",
+      SCHEDULE_CONFLICT: "Conflito de agenda",
+      ILLNESS: "Doença",
+      EMERGENCY: "Emergência",
+      PROFESSIONAL_UNAVAILABLE: "Profissional indisponível",
+      OTHER: "Outro",
+    };
+
+    const cancellationsByReason = cancellationsByReasonRaw.map((item) => ({
+      reason: reasonLabels[item.reason] || item.reason,
+      total: Number(item.total),
+      percentage: totalCancellations > 0 ? (Number(item.total) / totalCancellations) * 100 : 0,
+    }));
+
+    return {
+      totalCancellations,
+      cancelRate,
+      lostRevenue,
+      cancellationsByMonth,
+      cancellationsByService,
+      cancellationsByProfessional,
+      cancellationsByReason,
+      recentCancellations: recentCancellations.map((a) => ({
+        id: a.id,
+        clientName: a.client.name,
+        serviceName: a.service.name,
+        professionalName: a.employee.name,
+        date: a.start_time.toISOString(),
+        reason: a.cancel_reason,
+      })),
+    };
+  }
+
+  async getCancellations(id, page = 1, limit = 50) {
+    const where = {
+      company_id: id,
+      status: "CANCELED",
+    };
+
+    page = Number(page);
+
+    const [cancellations, total] = await Promise.all([
+      prisma.appointment.findMany({
+        where,
+        orderBy: { id: "asc" },
+        skip: (page - 1) * Number(limit),
+        take: Number(limit),
+        include: {
+          client: true,
+          service: true,
+          employee: true,
+        },
+      }),
+      prisma.appointment.count({ where }),
+    ]);
+
+    return {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      data: cancellations.map((a) => ({
+        id: a.id,
+        clientName: a.client.name,
+        serviceName: a.service.name,
+        professionalName: a.employee.name,
+        date: a.start_time.toISOString(),
+        reason: a.cancel_reason,
+      })),
+    };
   }
 }
