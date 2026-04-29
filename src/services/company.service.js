@@ -490,9 +490,34 @@ export class CompanyService {
     return services;
   }
 
-  async getInitialCancellations(id) {
+  async getInitialCancellations(id, time = 'month') {
     const now = new Date();
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const getStartDate = (time) => {
+      switch (time) {
+        case 'week': {
+          const d = new Date(now);
+          d.setDate(now.getDate() - 7);
+          return d;
+        }
+        case 'month':
+          return new Date(now.getFullYear(), now.getMonth(), 1);
+
+        case '3months':
+          return new Date(now.getFullYear(), now.getMonth() - 2, 1);
+
+        case '6months':
+          return new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+        case 'year':
+          return new Date(now.getFullYear(), 0, 1);
+
+        default:
+          return new Date(now.getFullYear(), now.getMonth(), 1);
+      }
+    };
+
+    const startDate = getStartDate(time);
 
     const [
       totalCancellations,
@@ -504,27 +529,34 @@ export class CompanyService {
       cancellationsByReasonRaw,
       recentCancellations
     ] = await Promise.all([
+      // 🔹 total cancelamentos
       prisma.appointment.count({
         where: {
           company_id: id,
           status: "CANCELED",
+          start_time: { gte: startDate },
         },
       }),
 
+      // 🔹 total agendamentos
       prisma.appointment.count({
         where: {
           company_id: id,
+          start_time: { gte: startDate },
         },
       }),
 
+      // 🔹 faturamento perdido
       prisma.$queryRaw`
         SELECT COALESCE(SUM(s.price), 0) as total
         FROM appointments a
         JOIN services s ON s.id = a.service_id
         WHERE a.company_id = ${id}
           AND a.status = 'CANCELED'
+          AND a.start_time >= ${startDate}
       `,
 
+      // 🔹 gráfico (fixo 6 meses)
       prisma.$queryRaw`
         SELECT
           TO_CHAR(a.start_time, 'YYYY-MM') as month,
@@ -537,6 +569,7 @@ export class CompanyService {
         ORDER BY month
       `,
 
+      // 🔹 por serviço
       prisma.$queryRaw`
         SELECT 
           s.name,
@@ -545,23 +578,27 @@ export class CompanyService {
         JOIN services s ON s.id = a.service_id
         WHERE a.company_id = ${id}
           AND a.status = 'CANCELED'
+          AND a.start_time >= ${startDate}
         GROUP BY s.name
         ORDER BY total DESC
       `,
 
+      // 🔹 por profissional
       prisma.$queryRaw`
         SELECT 
           u.name,
           COUNT(a.id)::int as cancellations,
-          (SELECT COUNT(*) FROM appointments a2 WHERE a2.employee_id = a.employee_id AND a2.company_id = ${id})::int as total
+          (SELECT COUNT(*) FROM appointments a2 WHERE a2.employee_id = a.employee_id AND a2.company_id = ${id} AND a2.start_time >= ${startDate})::int as total
         FROM appointments a
         JOIN users u ON u.id = a.employee_id
         WHERE a.company_id = ${id}
           AND a.status = 'CANCELED'
+          AND a.start_time >= ${startDate}
         GROUP BY u.name, a.employee_id
         ORDER BY cancellations DESC
       `,
 
+      // 🔹 por motivo
       prisma.$queryRaw`
         SELECT 
           a.cancel_reason as reason,
@@ -570,16 +607,19 @@ export class CompanyService {
         WHERE a.company_id = ${id}
           AND a.status = 'CANCELED'
           AND a.cancel_reason IS NOT NULL
+          AND a.start_time >= ${startDate}
         GROUP BY a.cancel_reason
         ORDER BY total DESC
       `,
 
+      // 🔹 recentes
       prisma.appointment.findMany({
         where: {
           company_id: id,
           status: "CANCELED",
+          start_time: { gte: startDate },
         },
-        orderBy: { id: "asc" },
+        orderBy: { start_time: "desc" },
         include: {
           service: true,
           client: true,
@@ -589,9 +629,9 @@ export class CompanyService {
       }),
     ]);
 
-    const cancelRate = totalAppointments > 0 
-      ? (totalCancellations / totalAppointments) * 100 
-      : 0;
+    const cancelRate = totalAppointments > 0
+        ? (totalCancellations / totalAppointments) * 100
+        : 0;
 
     const lostRevenue = Number(lostRevenueRaw[0]?.total || 0);
 

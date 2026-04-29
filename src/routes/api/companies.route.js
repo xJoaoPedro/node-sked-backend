@@ -22,6 +22,10 @@ companiesRouter.get('/:id/appointments', controller.getAppointments);
 // GET /:id/cancellations (todos os cancelamentos de uma empresa)
 companiesRouter.get('/:id/cancellations', controller.getCancellations);
 
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/cancellations (todas as infos sobre cancelamentos com intervalo de tempo)
+companiesRouter.get('/:id/cancellations/summary', controller.getInitialCancellations);
+
 // PATCH /:id
 companiesRouter.patch("/:id", controller.update);
 
