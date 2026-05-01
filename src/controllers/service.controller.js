@@ -49,9 +49,12 @@ export default class ServiceController {
       });
     }
 
-    await service.create(req.body);
+    const created = await service.create(req.body);
 
-    res.status(204).json();
+    res.status(200).json({
+      message: "Serviço criado com sucesso!",
+      data: created
+    });
   }
 
   async update(req, res) {

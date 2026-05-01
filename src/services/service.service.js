@@ -30,7 +30,7 @@ export class ServiceService {
       category
     } = service;
 
-    await prisma.service.create({
+    return await prisma.service.create({
       data: {
         name,
         description,
@@ -43,8 +43,6 @@ export class ServiceService {
         company: { connect: { id: Number(company_id) } },
       },
     });
-
-    return;
   }
 
   async update(id, data) {

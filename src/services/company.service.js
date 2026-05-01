@@ -260,13 +260,16 @@ export class CompanyService {
       `,
 
       prisma.$queryRaw`
-        SELECT s.name, COUNT(a.id)::int as total
-        FROM appointments a
-        JOIN services s ON s.id = a.service_id
-        WHERE a.company_id = ${id}
-        GROUP BY s.name
+        SELECT 
+          s.id,
+          s.name, 
+          COUNT(a.id)::int AS total
+        FROM services s
+        LEFT JOIN appointments a 
+          ON a.service_id = s.id
+          AND a.company_id = ${id}
+        GROUP BY s.id, s.name
         ORDER BY total DESC
-        LIMIT 5
       `,
 
       prisma.appointment.findMany({
