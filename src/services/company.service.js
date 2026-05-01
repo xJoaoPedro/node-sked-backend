@@ -497,20 +497,40 @@ export class CompanyService {
 
   async getCancellations(id, page = 1, limit = 50, time = 'month') {
     page = Number(page);
-    let startDate = null;
-
     const now = new Date();
 
-    if (time === 'week') {
-      startDate = new Date();
-      startDate.setDate(now.getDate() - 7);
-    } else if (time === 'month') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    } else if (time === '3months') {
-      startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-    } else if (time === 'year') {
-      startDate = new Date(now.getFullYear(), 0, 1);
-    }
+    const getStartDate = (time) => {
+      switch (time) {
+        case 'week': {
+          const d = new Date(now);
+          d.setDate(now.getDate() - 7);
+          return d;
+        }
+
+        case 'month': {
+          const d = new Date(now);
+          d.setDate(now.getDate() - 30);
+          return d;
+        }
+
+        case '3months': {
+          const d = new Date(now);
+          d.setDate(now.getDate() - 90);
+          return d;
+        }
+
+        case 'year': {
+          const d = new Date(now);
+          d.setDate(now.getDate() - 365);
+          return d;
+        }
+
+        default:
+          return new Date(now.getFullYear(), now.getMonth(), 1);
+      }
+    };
+
+    const startDate = getStartDate(time);
 
 
     const where = {
