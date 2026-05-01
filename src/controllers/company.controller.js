@@ -103,9 +103,9 @@ export default class CompanyController {
     });
   }
 
-  async getInitialCancellations(req, res) {
+  async getCancellations(req, res) {
     const id = Number(req.params.id);
-    const time = req.query.time;
+    const { page = 1, limit = 50, filterPeriod = 'month' } = req.query;
 
     if (isNaN(id)) {
       return res.status(400).json({
@@ -113,7 +113,7 @@ export default class CompanyController {
       });
     }
 
-    const cancellations = await service.getInitialCancellations(id, time);
+    const cancellations = await service.getCancellations(id, page, limit, filterPeriod);
 
     res.status(200).json({
       message: "Cancelamentos encontrados com sucesso!",
@@ -121,9 +121,9 @@ export default class CompanyController {
     });
   }
 
-  async getCancellations(req, res) {
+  async getInitialCancellations(req, res) {
     const id = Number(req.params.id);
-    const { page = 1, limit = 50 } = req.query;
+    const { page = 1, limit = 50, filterPeriod = 'month' } = req.query;
 
     if (isNaN(id)) {
       return res.status(400).json({
@@ -131,11 +131,47 @@ export default class CompanyController {
       });
     }
 
-    const cancellations = await service.getCancellations(id, page, limit);
+    const cancellations = await service.getInitialCancellations(id, page, limit, filterPeriod);
 
     res.status(200).json({
       message: "Cancelamentos encontrados com sucesso!",
       data: cancellations,
+    });
+  }
+
+  async getRevenues(req, res) {
+    const id = Number(req.params.id);
+    const { page = 1, limit = 50, filterPeriod = 'month' } = req.query;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const revenues = await service.getRevenues(id, page, limit, filterPeriod);
+
+    res.status(200).json({
+      message: "Receitas encontradas com sucesso!",
+      data: revenues,
+    });
+  }
+
+  async getInitialRevenues(req, res) {
+    const id = Number(req.params.id);
+    const { page = 1, limit = 50, filterPeriod = 'month' } = req.query;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const revenues = await service.getInitialRevenues(id, page, limit, filterPeriod);
+
+    res.status(200).json({
+      message: "Receitas encontradas com sucesso!",
+      data: revenues,
     });
   }
 }

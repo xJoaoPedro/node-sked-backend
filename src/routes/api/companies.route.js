@@ -23,8 +23,16 @@ companiesRouter.get('/:id/appointments', controller.getAppointments);
 companiesRouter.get('/:id/cancellations', controller.getCancellations);
 
 // TODO DOCUMENTAR ESSA BOMBA
-// GET /:id/cancellations (todas as infos sobre cancelamentos com intervalo de tempo)
+// GET /:id/cancellations/summary (todas as infos sobre cancelamentos com intervalo de tempo)
 companiesRouter.get('/:id/cancellations/summary', controller.getInitialCancellations);
+
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/revenue (todas informações sobre receita de uma empresa)
+companiesRouter.get('/:id/revenue', controller.getRevenues);
+
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/revenue/summary (todas as infos sobre receita com intervalo de tempo)
+companiesRouter.get('/:id/revenue/summary', controller.getInitialRevenues);
 
 // PATCH /:id
 companiesRouter.patch("/:id", controller.update);

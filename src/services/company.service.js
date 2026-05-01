@@ -98,6 +98,8 @@ export class CompanyService {
 
     const cancellations = await this.getInitialCancellations(id)
 
+    const revenue = await this.getInitialRevenues(id)
+
     const services = await this.getServices(id)
 
     return {
@@ -105,7 +107,7 @@ export class CompanyService {
       dailySchedules,
       appointments,
       cancellations,
-      // revenue
+      revenue,
       // comissions
       // reports
       // inventory
@@ -490,7 +492,62 @@ export class CompanyService {
     return services;
   }
 
-  async getInitialCancellations(id, time = 'month') {
+  async getCancellations(id, page = 1, limit = 50, time = 'month') {
+    page = Number(page);
+    let startDate = null;
+
+    const now = new Date();
+
+    if (time === 'week') {
+      startDate = new Date();
+      startDate.setDate(now.getDate() - 7);
+    } else if (time === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (time === '3months') {
+      startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    } else if (time === 'year') {
+      startDate = new Date(now.getFullYear(), 0, 1);
+    }
+
+
+    const where = {
+      company_id: id,
+      status: "CANCELED",
+      ...(startDate && { start_time: { gte: startDate } }),
+    };
+
+    const [cancellations, total] = await Promise.all([
+      prisma.appointment.findMany({
+        where,
+        orderBy: { id: "asc" },
+        skip: (page - 1) * Number(limit),
+        take: Number(limit),
+        include: {
+          client: true,
+          service: true,
+          employee: true,
+        },
+      }),
+      prisma.appointment.count({ where }),
+    ]);
+
+    return {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      data: cancellations.map((a) => ({
+        id: a.id,
+        clientName: a.client.name,
+        serviceName: a.service.name,
+        professionalName: a.employee.name,
+        date: a.start_time.toISOString(),
+        reason: a.cancel_reason,
+      })),
+    };
+  }
+
+  async getInitialCancellations(id, page = 1, limit = 50, time = 'month') {
     const now = new Date();
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
     const getStartDate = (time) => {
@@ -619,13 +676,14 @@ export class CompanyService {
           status: "CANCELED",
           start_time: { gte: startDate },
         },
+        skip: (page - 1) * Number(limit),
+        take: Number(limit),
         orderBy: { start_time: "desc" },
         include: {
           service: true,
           client: true,
           employee: true,
         },
-        take: 50,
       }),
     ]);
 
@@ -696,15 +754,31 @@ export class CompanyService {
     };
   }
 
-  async getCancellations(id, page = 1, limit = 50) {
+  async getRevenues(id, page = 1, limit = 50, time = 'month') {
+    page = Number(page);
+    let startDate = null;
+
+    const now = new Date();
+
+    if (time === 'week') {
+      startDate = new Date();
+      startDate.setDate(now.getDate() - 7);
+    } else if (time === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (time === '3months') {
+      startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    } else if (time === 'year') {
+      startDate = new Date(now.getFullYear(), 0, 1);
+    }
+
     const where = {
       company_id: id,
-      status: "CANCELED",
+      status: { in: ["COMPLETED", "PENDING"] },
+      payment_method: { not: null },
+      ...(startDate && { start_time: { gte: startDate } }),
     };
 
-    page = Number(page);
-
-    const [cancellations, total] = await Promise.all([
+    const [payments, total] = await Promise.all([
       prisma.appointment.findMany({
         where,
         orderBy: { id: "asc" },
@@ -716,6 +790,7 @@ export class CompanyService {
           employee: true,
         },
       }),
+
       prisma.appointment.count({ where }),
     ]);
 
@@ -724,14 +799,166 @@ export class CompanyService {
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      data: cancellations.map((a) => ({
+      data: payments.map((a) => ({
         id: a.id,
+        date: a.start_time.toISOString(),
         clientName: a.client.name,
         serviceName: a.service.name,
         professionalName: a.employee.name,
+        paymentMethod: a.payment_method,
+        value: Number(a.service.price),
+        status: a.status,
+      }))
+    };
+  }
+
+  async getInitialRevenues(id, page = 1, limit = 50, time = 'month') {
+    const now = new Date();
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const getStartDate = (time) => {
+      switch (time) {
+        case 'week': {
+          const d = new Date(now);
+          d.setDate(now.getDate() - 7);
+          return d;
+        }
+        case 'month':
+          return new Date(now.getFullYear(), now.getMonth(), 1);
+        case '3months':
+          return new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        case '6months':
+          return new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        case 'year':
+          return new Date(now.getFullYear(), 0, 1);
+        default:
+          return new Date(now.getFullYear(), now.getMonth(), 1);
+      }
+    };
+
+    const startDate = getStartDate(time);
+
+    const [
+      revenueReceivedRaw,
+      revenuePendingRaw,
+      totalTransactions,
+      revenueByMonthRaw,
+      revenueByPaymentRaw,
+      recentPayments
+    ] = await Promise.all([
+      // 💰 receita recebida
+      prisma.$queryRaw`
+        SELECT COALESCE(SUM(s.price), 0) as total
+        FROM appointments a
+        JOIN services s ON s.id = a.service_id
+        WHERE a.company_id = ${id}
+          AND a.status = 'COMPLETED'
+          AND a.start_time >= ${startDate}
+      `,
+
+      // ⏳ receita pendente
+      prisma.$queryRaw`
+        SELECT COALESCE(SUM(s.price), 0) as total
+        FROM appointments a
+        JOIN services s ON s.id = a.service_id
+        WHERE a.company_id = ${id}
+          AND a.status IN ('PENDING', 'CONFIRMED')
+          AND a.start_time >= ${startDate}
+      `,
+
+      // 🔢 nº de transações pagas
+      prisma.appointment.count({
+        where: {
+          company_id: id,
+          status: "COMPLETED",
+          start_time: { gte: startDate },
+        },
+      }),
+
+      // 📊 receita últimos 6 meses
+      prisma.$queryRaw`
+        SELECT
+          TO_CHAR(a.start_time, 'YYYY-MM') as month,
+          SUM(s.price)::float as total
+        FROM appointments a
+        JOIN services s ON s.id = a.service_id
+        WHERE a.company_id = ${id}
+          AND a.status = 'COMPLETED'
+          AND a.start_time >= ${sixMonthsAgo}
+        GROUP BY month
+        ORDER BY month
+      `,
+
+      // 💳 por forma de pagamento
+      prisma.$queryRaw`
+        SELECT 
+          a.payment_method,
+          SUM(s.price)::float as total
+        FROM appointments a
+        JOIN services s ON s.id = a.service_id
+        WHERE a.company_id = ${id}
+          AND a.status = 'COMPLETED'
+          AND a.payment_method IS NOT NULL
+          AND a.start_time >= ${startDate}
+        GROUP BY a.payment_method
+      `,
+
+      // 🔹 recentes
+      prisma.appointment.findMany({
+        where: {
+          company_id: id,
+          status: { in: ["COMPLETED", "PENDING"], },
+          payment_method: { not: null },
+          start_time: { gte: startDate },
+        },
+        orderBy: { start_time: "desc" },
+        include: {
+          service: true,
+          client: true,
+          employee: true,
+        },
+        take: 50,
+      }),
+    ]);
+
+    const revenueReceived = Number(revenueReceivedRaw[0]?.total || 0);
+    const revenuePending = Number(revenuePendingRaw[0]?.total || 0);
+
+    const avgTicket = totalTransactions > 0
+      ? revenueReceived / totalTransactions
+      : 0;
+
+    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+    const revenueByMonth = revenueByMonthRaw.map((item) => {
+      const [, month] = item.month.split('-');
+      return {
+        month: monthNames[parseInt(month, 10) - 1],
+        total: Number(item.total),
+      };
+    });
+
+    const revenueByPayment = revenueByPaymentRaw.map((item) => ({
+      method: item.payment_method,
+      total: Number(item.total),
+    }));
+
+    return {
+      revenueReceived,
+      revenuePending,
+      avgTicket,
+      totalTransactions,
+      revenueByMonth,
+      revenueByPayment,
+      recentPayments: recentPayments.map((a) => ({
+        id: a.id,
         date: a.start_time.toISOString(),
-        reason: a.cancel_reason,
-      })),
+        clientName: a.client.name,
+        serviceName: a.service.name,
+        professionalName: a.employee.name,
+        paymentMethod: a.payment_method,
+        value: Number(a.service.price),
+        status: a.status,
+      }))
     };
   }
 }
