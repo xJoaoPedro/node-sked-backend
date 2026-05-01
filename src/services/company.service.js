@@ -560,17 +560,24 @@ export class CompanyService {
           d.setDate(now.getDate() - 7);
           return d;
         }
-        case 'month':
-          return new Date(now.getFullYear(), now.getMonth(), 1);
 
-        case '3months':
-          return new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        case 'month': {
+          const d = new Date(now);
+          d.setDate(now.getDate() - 30);
+          return d;
+        }
 
-        case '6months':
-          return new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        case '3months': {
+          const d = new Date(now);
+          d.setDate(now.getDate() - 90);
+          return d;
+        }
 
-        case 'year':
-          return new Date(now.getFullYear(), 0, 1);
+        case 'year': {
+          const d = new Date(now);
+          d.setDate(now.getDate() - 365);
+          return d;
+        }
 
         default:
           return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -618,15 +625,20 @@ export class CompanyService {
 
       // 🔹 gráfico (fixo 6 meses)
       prisma.$queryRaw`
-        SELECT
-          TO_CHAR(a.start_time, 'YYYY-MM') as month,
-          COUNT(a.id)::int as total
-        FROM appointments a
-        WHERE a.company_id = ${id}
+        WITH months AS (
+          SELECT TO_CHAR(date_trunc('month', CURRENT_DATE) - INTERVAL '5 months' + (n || ' month')::interval, 'YYYY-MM') AS month
+          FROM generate_series(0, 5) AS n
+        )
+        SELECT 
+          m.month,
+          COALESCE(COUNT(a.id), 0)::int AS total
+        FROM months m
+        LEFT JOIN appointments a
+          ON TO_CHAR(a.start_time, 'YYYY-MM') = m.month
+          AND a.company_id = ${id}
           AND a.status = 'CANCELED'
-          AND a.start_time >= ${sixMonthsAgo}
-        GROUP BY month
-        ORDER BY month
+        GROUP BY m.month
+        ORDER BY m.month
       `,
 
       // 🔹 por serviço
