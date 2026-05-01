@@ -766,7 +766,6 @@ Utilizada para configurar os horários bloqueados de funcionários
 | name |	String |	Nome do serviço |	NOT NULL |
 | description |	String |	Descrição |	NULL |
 | duration_minutes |	Int |	Duração em minutos |	NOT NULL |
-| buffer_minutes |	Int |	Tempo extra entre atendimentos |	NOT NULL, DEFAULT (0) |
 | price |	Decimal |	Preço |	NOT NULL |
 | status |	enum |	Status (ACTIVE, DISABLED) |	NOT NULL, DEFAULT (ACTIVE) |
 | created_at | DateTime | Data de criação | NOT NULL, DEFAUT (now()) |
@@ -794,7 +793,6 @@ Utilizada para configurar os horários bloqueados de funcionários
 			"name": "Corte de cabelo",
 			"description": null,
 			"duration_minutes": 30,
-			"buffer_minutes": 0,
 			"price": "50",
 			"status": "ACTIVE",
 			"created_at": "2026-04-13T21:58:46.449Z",
@@ -815,7 +813,6 @@ Utilizada para configurar os horários bloqueados de funcionários
 		"name": "Corte de cabelo",
 		"description": null,
 		"duration_minutes": 30,
-		"buffer_minutes": 0,
 		"price": "50",
 		"status": "ACTIVE",
 		"created_at": "2026-04-13T21:58:46.449Z",

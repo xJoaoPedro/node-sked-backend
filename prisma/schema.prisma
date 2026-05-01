@@ -115,18 +115,20 @@ model ScheduleBlock {
 }
 
 model Service {
-  id               Int           @id @default(autoincrement())
+  id               Int                    @id @default(autoincrement())
   company_id       Int
-  name             String        @db.VarChar(255)
-  description      String?       @db.VarChar(255)
+  name             String                 @db.VarChar(255)
+  category         service_category_enum  @default(OTHER)
+  description      String?                @db.VarChar(255)
   duration_minutes Int
-  buffer_minutes   Int           @default(0)
-  price            Decimal       @db.Decimal(10, 2)
-  status           status_enum   @default(ACTIVE)
-  created_at       DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime      @updatedAt @db.Timestamptz(6)
+  price            Decimal                @db.Decimal(10, 2)
+  commission       Decimal                @db.Decimal(5, 2)
+  status           status_enum            @default(ACTIVE)
+  created_at       DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime               @updatedAt @db.Timestamptz(6)
+
   appointments     Appointment[]
-  company          Company       @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  company          Company                @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@map("services")
 }
@@ -256,4 +258,24 @@ enum payment_method_enum {
   CREDIT
   DEBIT
   CASH
+}
+
+enum service_category_enum {
+  HAIR
+  BEARD
+  AESTHETIC
+  NAILS
+  MASSAGE
+  THERAPY
+  HEALTH
+  DENTAL
+  FITNESS
+  BEAUTY
+  AUTOMOTIVE
+  TECHNICAL
+  HOME_SERVICE
+  PET
+  CONSULTING
+  EDUCATION
+  OTHER
 }

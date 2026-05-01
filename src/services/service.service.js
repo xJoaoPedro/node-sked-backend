@@ -24,9 +24,10 @@ export class ServiceService {
       name,
       description,
       duration_minutes,
-      buffer_minutes,
       price,
       status,
+      commission,
+      category
     } = service;
 
     await prisma.service.create({
@@ -34,9 +35,10 @@ export class ServiceService {
         name,
         description,
         duration_minutes: Number(duration_minutes),
-        buffer_minutes: buffer_minutes !== undefined ? Number(buffer_minutes) : undefined,
         price: Number(price),
         status,
+        commission,
+        category,
 
         company: { connect: { id: Number(company_id) } },
       },

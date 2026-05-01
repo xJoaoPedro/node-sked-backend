@@ -174,4 +174,21 @@ export default class CompanyController {
       data: revenues,
     });
   }
+
+  async getServices(req, res) {
+    const id = Number(req.params.id);
+    
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const services = await service.getServices(id);
+
+    res.status(200).json({
+      message: "Receitas encontradas com sucesso!",
+      data: services,
+    });
+  }
 }

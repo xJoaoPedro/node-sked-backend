@@ -18,6 +18,11 @@ function getRandomItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// 🔥 comissão opcional aleatória
+function getRandomCommission(min = 30, max = 50) {
+  return Number((Math.random() * (max - min) + min).toFixed(2));
+}
+
 // 🔥 slots de 30min
 const TIME_SLOTS = Array.from({ length: (22 - 6) * 2 }, (_, i) => {
   const hour = 6 + Math.floor(i / 2);
@@ -188,15 +193,39 @@ async function main() {
     )
   );
 
+  // ---------------------
+  // 🧾 SERVICES (ATUALIZADO)
+  // ---------------------
   const services = await Promise.all([
     prisma.service.create({
-      data: { company_id: company.id, name: "Corte", duration_minutes: 30, price: 50 },
+      data: {
+        company_id: company.id,
+        name: "Corte",
+        category: "HAIR",
+        duration_minutes: 30,
+        price: 50,
+        commission: 40,
+      },
     }),
     prisma.service.create({
-      data: { company_id: company.id, name: "Barba", duration_minutes: 30, price: 30 },
+      data: {
+        company_id: company.id,
+        name: "Barba",
+        category: "BEARD",
+        duration_minutes: 30,
+        price: 30,
+        commission: 30,
+      },
     }),
     prisma.service.create({
-      data: { company_id: company.id, name: "Combo", duration_minutes: 60, price: 70 },
+      data: {
+        company_id: company.id,
+        name: "Combo (Corte + Barba)",
+        category: "HAIR",
+        duration_minutes: 60,
+        price: 70,
+        commission: 45,
+      },
     }),
   ]);
 
@@ -204,16 +233,15 @@ async function main() {
   const today = new Date();
 
   // ---------------------
-  // 📅 ÚLTIMOS 6 MESES (GARANTIDO)
+  // 📅 ÚLTIMOS 6 MESES
   // ---------------------
   for (let m = 0; m < 6; m++) {
     const baseDate = new Date();
-    baseDate.setDate(1); // 🔥 CRÍTICO
+    baseDate.setDate(1);
     baseDate.setMonth(today.getMonth() - m);
 
     const year = baseDate.getFullYear();
     const month = baseDate.getMonth();
-
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
     let monthAppointments = [];
@@ -222,7 +250,6 @@ async function main() {
       const date = new Date(year, month, day);
 
       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-
       const activityChance = isWeekend ? 0.4 : 0.75;
 
       if (Math.random() > activityChance) continue;
@@ -246,7 +273,6 @@ async function main() {
         if (apt) dailyAppointments.push(apt);
       }
 
-      // ✔ garante COMPLETED no dia
       const hasCompleted = dailyAppointments.some(a => a.status === "COMPLETED");
 
       if (!hasCompleted && dailyAppointments.length > 0) {
@@ -258,7 +284,6 @@ async function main() {
       monthAppointments.push(...dailyAppointments);
     }
 
-    // ✔ garante pelo menos 1 agendamento no mês
     if (monthAppointments.length === 0) {
       const fallbackDate = new Date(year, month, 15);
 
@@ -274,7 +299,6 @@ async function main() {
       if (apt) monthAppointments.push(apt);
     }
 
-    // ✔ garante pelo menos 1 COMPLETED no mês
     const hasMonthCompleted = monthAppointments.some(a => a.status === "COMPLETED");
 
     if (!hasMonthCompleted) {
@@ -290,7 +314,7 @@ async function main() {
     data: appointments,
   });
 
-  console.log("🌱 Seed REALISTA e GARANTIDO!");
+  console.log("🌱 Seed atualizado com categorias e comissões!");
 }
 
 main()

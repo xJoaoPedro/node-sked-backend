@@ -34,6 +34,10 @@ companiesRouter.get('/:id/revenue', controller.getRevenues);
 // GET /:id/revenue/summary (todas as infos sobre receita com intervalo de tempo)
 companiesRouter.get('/:id/revenue/summary', controller.getInitialRevenues);
 
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/services (todos os servicos de uma empresa)
+companiesRouter.get('/:id/revenue', controller.getServices);
+
 // PATCH /:id
 companiesRouter.patch("/:id", controller.update);
 

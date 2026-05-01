@@ -5,7 +5,8 @@ const validator = z.object({
   name:             z.string().max(255),
   description:      z.string().max(255).nullable().optional(),
   duration_minutes: z.coerce.number(),
-  buffer_minutes:   z.coerce.number().optional(),
+  commission:       z.coerce.number().nonnegative().min(0).max(100),
+  category:         z.enum(['HAIR', 'BEARD', 'AESTHETIC', 'NAILS', 'MASSAGE', 'THERAPY', 'HEALTH', 'DENTAL', 'FITNESS', 'BEAUTY', 'AUTOMOTIVE', 'TECHNICAL', 'HOME_SERVICE', 'PET', 'CONSULTING', 'EDUCATION', 'OTHER']).optional(),
   price:            z.coerce.number().nonnegative(),
   status:           z.enum(["ACTIVE", "DISABLED"]).optional()
 });
