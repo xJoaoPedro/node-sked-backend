@@ -100,6 +100,8 @@ export class CompanyService {
 
     const revenue = await this.getInitialRevenues(id)
 
+    const products = await this.getProducts(id)
+
     const services = await this.getServices(id)
 
     return {
@@ -110,7 +112,7 @@ export class CompanyService {
       revenue,
       // comissions
       // reports
-      // inventory
+      products,
       services,
       // professionals
       // customers
@@ -994,6 +996,34 @@ export class CompanyService {
         value: Number(a.service.price),
         status: a.status,
       }))
+    };
+  }
+
+  async getProducts(id) {
+    const products = await prisma.product.findMany({
+      where: {
+        company_id: id,
+      },
+    });
+
+    const totalProducts = products.reduce((acc, product) => {
+      return acc + Number(product.quantity);
+    }, 0);
+
+    const totalCost = products.reduce((acc, product) => {
+      return acc + Number(product.cost_price) * product.quantity;
+    }, 0);
+
+    const lowStock = products.filter(p => p.quantity > 0 && p.quantity < 2).length;
+
+    const outOfStock = products.filter(p => p.quantity === 0).length;
+
+    return {
+      products,
+      totalProducts,
+      totalCost,
+      lowStock,
+      outOfStock,
     };
   }
 }

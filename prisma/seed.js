@@ -18,19 +18,34 @@ function getRandomItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// 🔥 comissão opcional aleatória
 function getRandomCommission(min = 30, max = 50) {
   return Number((Math.random() * (max - min) + min).toFixed(2));
 }
 
-// 🔥 slots de 30min
+// ---------------------
+// Products helpers
+// ---------------------
+const PRODUCT_NAMES = {
+  HAIR: ["Shampoo Profissional", "Condicionador", "Pomada Modeladora"],
+  BEARD: ["Óleo de Barba", "Balm", "Shampoo Barba"],
+  AESTHETIC: ["Creme Facial", "Sérum", "Hidratante"],
+  BEAUTY: ["Base", "Primer", "Fixador"],
+  OTHER: ["Produto Genérico"],
+};
+
+function getRandomProduct(category) {
+  return getRandomItem(PRODUCT_NAMES[category] || PRODUCT_NAMES.OTHER);
+}
+
+// ---------------------
+// Appointment utils (mantido teu código)
+// ---------------------
 const TIME_SLOTS = Array.from({ length: (22 - 6) * 2 }, (_, i) => {
   const hour = 6 + Math.floor(i / 2);
   const minute = i % 2 === 0 ? 0 : 30;
   return { hour, minute };
 });
 
-// 🔥 horários com peso
 function getWeightedTimeSlot() {
   const peakMorning = TIME_SLOTS.filter(s => s.hour >= 9 && s.hour <= 12);
   const peakEvening = TIME_SLOTS.filter(s => s.hour >= 17 && s.hour <= 20);
@@ -42,7 +57,6 @@ function getWeightedTimeSlot() {
   return getRandomItem(TIME_SLOTS);
 }
 
-// 🔥 cancelamentos
 const CANCEL_REASONS = [
   "NO_SHOW",
   "SCHEDULE_CONFLICT",
@@ -52,7 +66,6 @@ const CANCEL_REASONS = [
   "OTHER",
 ];
 
-// 💳 pagamentos
 function getWeightedPaymentMethod() {
   const rand = Math.random();
 
@@ -63,7 +76,7 @@ function getWeightedPaymentMethod() {
 }
 
 // ---------------------
-// Generator
+// Appointment generator
 // ---------------------
 function generateAppointment({
   date,
@@ -85,17 +98,14 @@ function generateAppointment({
   const end = new Date(start);
   end.setMinutes(end.getMinutes() + service.duration_minutes);
 
-  if (end.getHours() > 22 || (end.getHours() === 22 && end.getMinutes() > 0)) {
-    return null;
-  }
+  if (end.getHours() > 22) return null;
 
   let status;
   let cancel_reason = null;
   let payment_method = null;
 
   if (isFuture) {
-    const rand = Math.random();
-    status = rand < 0.7 ? "CONFIRMED" : "PENDING";
+    status = Math.random() < 0.7 ? "CONFIRMED" : "PENDING";
   } else {
     const rand = Math.random();
 
@@ -194,7 +204,7 @@ async function main() {
   );
 
   // ---------------------
-  // 🧾 SERVICES (ATUALIZADO)
+  // SERVICES
   // ---------------------
   const services = await Promise.all([
     prisma.service.create({
@@ -229,12 +239,33 @@ async function main() {
     }),
   ]);
 
+  // ---------------------
+  // 🧴 PRODUCTS (NOVO)
+  // ---------------------
+  const productCategories = ["HAIR", "BEARD", "AESTHETIC", "BEAUTY"];
+
+  const products = await Promise.all(
+    productCategories.flatMap((category) =>
+      Array.from({ length: 2 }).map(() =>
+        prisma.product.create({
+          data: {
+            company_id: company.id,
+            name: getRandomProduct(category),
+            category,
+            quantity: randomBetween(5, 50),
+            cost_price: Number((Math.random() * 20 + 5).toFixed(2)),
+          },
+        })
+      )
+    )
+  );
+
+  // ---------------------
+  // APPOINTMENTS
+  // ---------------------
   const appointments = [];
   const today = new Date();
 
-  // ---------------------
-  // 📅 ÚLTIMOS 6 MESES
-  // ---------------------
   for (let m = 0; m < 6; m++) {
     const baseDate = new Date();
     baseDate.setDate(1);
@@ -254,11 +285,7 @@ async function main() {
 
       if (Math.random() > activityChance) continue;
 
-      const count = isWeekend
-        ? randomBetween(4, 10)
-        : randomBetween(8, 20);
-
-      const dailyAppointments = [];
+      const count = isWeekend ? randomBetween(4, 10) : randomBetween(8, 20);
 
       for (let i = 0; i < count; i++) {
         const apt = generateAppointment({
@@ -270,41 +297,8 @@ async function main() {
           isFuture: false,
         });
 
-        if (apt) dailyAppointments.push(apt);
+        if (apt) monthAppointments.push(apt);
       }
-
-      const hasCompleted = dailyAppointments.some(a => a.status === "COMPLETED");
-
-      if (!hasCompleted && dailyAppointments.length > 0) {
-        const i = Math.floor(Math.random() * dailyAppointments.length);
-        dailyAppointments[i].status = "COMPLETED";
-        dailyAppointments[i].payment_method = getWeightedPaymentMethod();
-      }
-
-      monthAppointments.push(...dailyAppointments);
-    }
-
-    if (monthAppointments.length === 0) {
-      const fallbackDate = new Date(year, month, 15);
-
-      const apt = generateAppointment({
-        date: fallbackDate,
-        services,
-        employees,
-        clients,
-        companyId: company.id,
-        isFuture: false,
-      });
-
-      if (apt) monthAppointments.push(apt);
-    }
-
-    const hasMonthCompleted = monthAppointments.some(a => a.status === "COMPLETED");
-
-    if (!hasMonthCompleted) {
-      const i = Math.floor(Math.random() * monthAppointments.length);
-      monthAppointments[i].status = "COMPLETED";
-      monthAppointments[i].payment_method = getWeightedPaymentMethod();
     }
 
     appointments.push(...monthAppointments);
@@ -314,7 +308,7 @@ async function main() {
     data: appointments,
   });
 
-  console.log("🌱 Seed atualizado com categorias e comissões!");
+  console.log("🌱 Seed completo: serviços + produtos + agendamentos gerados!");
 }
 
 main()

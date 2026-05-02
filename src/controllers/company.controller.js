@@ -191,4 +191,21 @@ export default class CompanyController {
       data: services,
     });
   }
+
+  async getProducts(req, res) {
+    const id = Number(req.params.id);
+    
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const services = await service.getProducts(id);
+
+    res.status(200).json({
+      message: "Produtos encontrados com sucesso!",
+      data: services,
+    });
+  }
 }
