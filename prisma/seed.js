@@ -38,7 +38,7 @@ function getRandomProduct(category) {
 }
 
 // ---------------------
-// Appointment utils (mantido teu código)
+// Appointment utils
 // ---------------------
 const TIME_SLOTS = Array.from({ length: (22 - 6) * 2 }, (_, i) => {
   const hour = 6 + Math.floor(i / 2);
@@ -123,7 +123,7 @@ function generateAppointment({
   return {
     company_id: companyId,
     service_id: service.id,
-    employee_id: employee.id,
+    employee_id: employee.id, // 🔥 agora é Employee
     client_id: client.id,
     start_time: start,
     end_time: end,
@@ -139,6 +139,7 @@ function generateAppointment({
 async function main() {
   const password = await bcrypt.hash("123456", 10);
 
+  // COMPANY
   const company = await prisma.company.create({
     data: {
       legal_name: "Empresa LTDA",
@@ -150,7 +151,8 @@ async function main() {
     },
   });
 
-  const admin = await prisma.user.create({
+  // ADMIN (vira MANAGER via Employee)
+  const adminUser = await prisma.user.create({
     data: {
       name: "Admin",
       email: "admin@empresa.com",
@@ -159,37 +161,45 @@ async function main() {
     },
   });
 
-  await prisma.companyUser.create({
+  const adminEmployee = await prisma.employee.create({
     data: {
       company_id: company.id,
-      user_id: admin.id,
+      user_id: adminUser.id,
+      name: adminUser.name,
+      email: adminUser.email,
+      phone: adminUser.phone,
       role: "MANAGER",
     },
   });
 
-  const employees = await Promise.all(
-    Array.from({ length: 3 }).map((_, i) =>
-      prisma.user.create({
-        data: {
-          name: `Funcionario ${i + 1}`,
-          email: `func${i + 1}@empresa.com`,
-          password,
-          phone: "51999999999",
-        },
-      })
-    )
-  );
+  // EMPLOYEES
+  const employees = [];
 
-  for (const emp of employees) {
-    await prisma.companyUser.create({
+  for (let i = 0; i < 3; i++) {
+    const user = await prisma.user.create({
+      data: {
+        name: `Funcionario ${i + 1}`,
+        email: `func${i + 1}@empresa.com`,
+        password,
+        phone: "51999999999",
+      },
+    });
+
+    const employee = await prisma.employee.create({
       data: {
         company_id: company.id,
-        user_id: emp.id,
+        user_id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
         role: "EMPLOYEE",
       },
     });
+
+    employees.push(employee);
   }
 
+  // CLIENTS
   const clients = await Promise.all(
     Array.from({ length: 30 }).map((_, i) =>
       prisma.user.create({
@@ -203,9 +213,7 @@ async function main() {
     )
   );
 
-  // ---------------------
   // SERVICES
-  // ---------------------
   const services = await Promise.all([
     prisma.service.create({
       data: {
@@ -239,12 +247,24 @@ async function main() {
     }),
   ]);
 
-  // ---------------------
-  // 🧴 PRODUCTS (NOVO)
-  // ---------------------
+  // 🔥 vínculo N:N Employee ↔ Service
+  for (const employee of employees) {
+    for (const service of services) {
+      if (Math.random() > 0.3) {
+        await prisma.employeeService.create({
+          data: {
+            employee_id: employee.id,
+            service_id: service.id,
+          },
+        });
+      }
+    }
+  }
+
+  // PRODUCTS
   const productCategories = ["HAIR", "BEARD", "AESTHETIC", "BEAUTY"];
 
-  const products = await Promise.all(
+  await Promise.all(
     productCategories.flatMap((category) =>
       Array.from({ length: 2 }).map(() =>
         prisma.product.create({
@@ -260,9 +280,7 @@ async function main() {
     )
   );
 
-  // ---------------------
   // APPOINTMENTS
-  // ---------------------
   const appointments = [];
   const today = new Date();
 
@@ -308,7 +326,7 @@ async function main() {
     data: appointments,
   });
 
-  console.log("🌱 Seed completo: serviços + produtos + agendamentos gerados!");
+  console.log("🌱 Seed atualizado com Employee + serviços + agendamentos!");
 }
 
 main()

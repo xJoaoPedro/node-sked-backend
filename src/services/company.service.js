@@ -388,13 +388,9 @@ export class CompanyService {
       },
     });
 
-    const professionals = await prisma.companyUser.findMany({
-      where: {
-        company_id: id,
-      },
-      include: {
-        user: true,
-      },
+    const professionals = await prisma.employee.findMany({
+      where: { company_id: id, },
+      include: { user: true, },
     });
 
     return {
