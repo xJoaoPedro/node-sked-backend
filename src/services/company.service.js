@@ -334,6 +334,11 @@ export class CompanyService {
       lastMonthCancelRate
     )
 
+    const { fantasy_name } = await prisma.company.findUnique({
+      where: { id },
+      select: { fantasy_name: true }
+    });
+
     const nextAppointments = appointments.map((a) => ({
       id: String(a.id),
       clientName: a.client.name,
@@ -348,6 +353,7 @@ export class CompanyService {
     }))
 
     return {
+      companyName: fantasy_name,
       totalToday,
       totalClients: totalClients.length,
       monthClients: monthClients.length,
@@ -1004,6 +1010,7 @@ export class CompanyService {
       where: {
         company_id: id,
       },
+      orderBy: { id: 'asc' }
     });
 
     const totalProducts = products.reduce((acc, product) => {
@@ -1014,7 +1021,7 @@ export class CompanyService {
       return acc + Number(product.cost_price) * product.quantity;
     }, 0);
 
-    const lowStock = products.filter(p => p.quantity > 0 && p.quantity < 2).length;
+    const lowStock = products.filter(p => p.quantity > 0 && p.quantity <= 2).length;
 
     const outOfStock = products.filter(p => p.quantity === 0).length;
 
