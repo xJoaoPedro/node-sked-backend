@@ -10,11 +10,37 @@ companiesRouter.get("/", controller.findAll);
 // GET /id
 companiesRouter.get("/:id", controller.findOne);
 
+// TODO DOCUMENTAR ESSA BOMBA TBM
 // GET /id/data (todos dados de empresa)
 companiesRouter.get('/:id/data', controller.getAllData);
 
-// POST /
-companiesRouter.post("/", controller.create);
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/appointments (todos os agendamentos de uma empresa)
+companiesRouter.get('/:id/appointments', controller.getAppointments);
+
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/cancellations (todos os cancelamentos de uma empresa)
+companiesRouter.get('/:id/cancellations', controller.getCancellations);
+
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/cancellations/summary (todas as infos sobre cancelamentos com intervalo de tempo)
+companiesRouter.get('/:id/cancellations/summary', controller.getInitialCancellations);
+
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/revenue (todas informações sobre receita de uma empresa)
+companiesRouter.get('/:id/revenue', controller.getRevenues);
+
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/revenue/summary (todas as infos sobre receita com intervalo de tempo)
+companiesRouter.get('/:id/revenue/summary', controller.getInitialRevenues);
+
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/services (todos os servicos de uma empresa)
+companiesRouter.get('/:id/revenue', controller.getServices);
+
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/products (todos as infos de produtos de uma empresa)
+companiesRouter.get('/:id/products', controller.getProducts);
 
 // PATCH /:id
 companiesRouter.patch("/:id", controller.update);

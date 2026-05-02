@@ -10,6 +10,9 @@ appointmentsRouter.get("/", controller.findAll);
 // GET /id
 appointmentsRouter.get("/:id", controller.findOne);
 
+// GET /id/date
+appointmentsRouter.get("/:id/:date", controller.getAppointmentsByDate);
+
 // POST /
 appointmentsRouter.post("/", controller.create);
 

@@ -39,21 +39,6 @@ export default class CompanyController {
     });
   }
 
-  async create(req, res) {
-    const parsed = createCompanyValidator.safeParse(req.body);
-
-    if (!parsed.success) {
-      return res.status(400).json({
-        message: "Dados inválidos",
-        errors: JSON.parse(parsed.error),
-      });
-    }
-
-    await service.create(req.body);
-
-    res.status(204).json();
-  }
-
   async update(req, res) {
     const parsed = updateCompanyValidator.safeParse(req.body);
 
@@ -98,6 +83,129 @@ export default class CompanyController {
       message: "Empresa encontrada com sucesso!",
       data: data,
     });
+  }
+
+  async getAppointments(req, res) {
+    const id = Number(req.params.id);
+    const { page = 1, limit = 50, ...filters } = req.query;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const appointments = await service.getAppointments(id, page, limit, filters);
+
+    res.status(200).json({
+      message: "Agendamentos encontrados com sucesso!",
+      data: appointments,
+    });
+  }
+
+  async getCancellations(req, res) {
+    const id = Number(req.params.id);
+    const { page = 1, limit = 50, filterPeriod = 'month' } = req.query;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const cancellations = await service.getCancellations(id, page, limit, filterPeriod);
+
+    res.status(200).json({
+      message: "Cancelamentos encontrados com sucesso!",
+      data: cancellations,
+    });
+  }
+
+  async getInitialCancellations(req, res) {
+    const id = Number(req.params.id);
+    const { page = 1, limit = 50, filterPeriod = 'month' } = req.query;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const cancellations = await service.getInitialCancellations(id, page, limit, filterPeriod);
+
+    res.status(200).json({
+      message: "Cancelamentos encontrados com sucesso!",
+      data: cancellations,
+    });
+  }
+
+  async getRevenues(req, res) {
+    const id = Number(req.params.id);
+    const { page = 1, limit = 50, filterPeriod = 'month' } = req.query;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const revenues = await service.getRevenues(id, page, limit, filterPeriod);
+
+    res.status(200).json({
+      message: "Receitas encontradas com sucesso!",
+      data: revenues,
+    });
+  }
+
+  async getInitialRevenues(req, res) {
+    const id = Number(req.params.id);
+    const { page = 1, limit = 50, filterPeriod = 'month' } = req.query;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const revenues = await service.getInitialRevenues(id, page, limit, filterPeriod);
+
+    res.status(200).json({
+      message: "Receitas encontradas com sucesso!",
+      data: revenues,
+    });
+  }
+
+  async getServices(req, res) {
+    const id = Number(req.params.id);
     
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const services = await service.getServices(id);
+
+    res.status(200).json({
+      message: "Receitas encontradas com sucesso!",
+      data: services,
+    });
+  }
+
+  async getProducts(req, res) {
+    const id = Number(req.params.id);
+    
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const services = await service.getProducts(id);
+
+    res.status(200).json({
+      message: "Produtos encontrados com sucesso!",
+      data: services,
+    });
   }
 }

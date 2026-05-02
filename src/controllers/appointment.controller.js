@@ -39,6 +39,30 @@ export default class AppointmentController {
     });
   }
 
+  async getAppointmentsByDate(req, res) {
+    const id = Number(req.params.id);
+    const date = req.params.date;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const appointment = await service.getAppointmentsByDate(id, date);
+
+    if (!appointment) {
+      res.status(404).json({
+        message: "Agendamentos não encontrados para a data informada",
+      });
+    }
+
+    res.status(200).json({
+      message: "Agendamentos encontrados com sucesso!",
+      data: appointment,
+    });
+  }
+
   async create(req, res) {
     const parsed = createAppointmentValidator.safeParse(req.body);
 

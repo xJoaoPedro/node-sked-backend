@@ -1,18 +1,18 @@
-import { ServiceService } from "../services/service.service.js";
+import { ProductService } from "../services/product.service.js";
 import {
-  createServiceValidator,
-  updateServiceValidator,
-} from "../validators/service.validator.js";
+  createProductValidator,
+  updateProductValidator,
+} from "../validators/product.validator.js";
 
-const service = new ServiceService();
+const service = new ProductService();
 
-export default class ServiceController {
+export default class ProductController {
   async findAll(req, res) {
-    const services = await service.findAll();
+    const products = await service.findAll();
 
     return res.status(200).json({
       message: "Consulta realizada com sucesso!",
-      data: services,
+      data: products,
     });
   }
 
@@ -25,22 +25,22 @@ export default class ServiceController {
       });
     }
 
-    const serviceConsult = await service.findOne(id);
+    const productConsult = await service.findOne(id);
 
-    if (!service) {
+    if (!productConsult) {
       res.status(404).json({
-        message: "Serviço não encontrado",
+        message: "Produto não encontrado",
       });
     }
 
     res.status(200).json({
-      message: "Serviço encontrado com sucesso!",
-      data: serviceConsult,
+      message: "Produto encontrado com sucesso!",
+      data: productConsult,
     });
   }
 
   async create(req, res) {
-    const parsed = createServiceValidator.safeParse(req.body);
+    const parsed = createProductValidator.safeParse(req.body);
 
     if (!parsed.success) {
       return res.status(400).json({
@@ -52,13 +52,13 @@ export default class ServiceController {
     const created = await service.create(req.body);
 
     res.status(200).json({
-      message: "Serviço criado com sucesso!",
+      message: "Produto criado com sucesso!",
       data: created
     });
   }
 
   async update(req, res) {
-    const parsed = updateServiceValidator.safeParse(req.body);
+    const parsed = updateProductValidator.safeParse(req.body);
 
     if (!parsed.success) {
       return res.status(400).json({
@@ -72,7 +72,7 @@ export default class ServiceController {
     if (update) return res.status(204).json();
     else
       return res.status(404).json({
-        message: "Serviço não encontrado",
+        message: "Produto não encontrado",
       });
   }
 
@@ -82,7 +82,30 @@ export default class ServiceController {
     if (deleted) return res.status(204).json();
     else
       return res.status(404).json({
-        message: "Serviço não encontrado",
+        message: "Produto não encontrado",
       });
+  }
+
+  async getPageData(req, res) {
+    const id = Number(req.params.id);
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const data = await service.findOne(id);
+
+    if (!data) {
+      res.status(404).json({
+        message: "Houve algum erro na requisição",
+      });
+    }
+
+    res.status(200).json({
+      message: "",
+      data: data,
+    });
   }
 }

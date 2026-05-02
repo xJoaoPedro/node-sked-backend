@@ -6,24 +6,28 @@ import { UserService } from "../services/user.service.js";
 const companyService = new CompanyService();
 const userService = new UserService();
 
-function parse(req, res, type) {
+function parse(body, res, type) {
   let parsed = null;
 
   switch (type) {
     case "user":
-      parsed = createUserValidator.safeParse(req);
+      parsed = createUserValidator.safeParse(body);
       break;
     case "company":
-      parsed = createCompanyValidator.safeParse(req);
+      parsed = createCompanyValidator.safeParse(body);
       break;
   }
 
   if (!parsed.success) {
-    return res.status(400).json({
+    res.status(400).json({
       message: "Dados inválidos",
-      errors: JSON.parse(parsed.error),
+      errors: parsed.error.format(),
     });
+
+    return false;
   }
+
+  return true;
 }
 
 export default class AuthController {

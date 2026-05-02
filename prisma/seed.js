@@ -7,10 +7,138 @@ const { PrismaClient } = pkg;
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-async function main() {
-  const password = await bcrypt.hash("123456", 10)
+// ---------------------
+// Utils
+// ---------------------
+function randomBetween(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 
-  // Empresa
+function getRandomItem(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function getRandomCommission(min = 30, max = 50) {
+  return Number((Math.random() * (max - min) + min).toFixed(2));
+}
+
+// ---------------------
+// Products helpers
+// ---------------------
+const PRODUCT_NAMES = {
+  HAIR: ["Shampoo Profissional", "Condicionador", "Pomada Modeladora"],
+  BEARD: ["Óleo de Barba", "Balm", "Shampoo Barba"],
+  AESTHETIC: ["Creme Facial", "Sérum", "Hidratante"],
+  BEAUTY: ["Base", "Primer", "Fixador"],
+  OTHER: ["Produto Genérico"],
+};
+
+function getRandomProduct(category) {
+  return getRandomItem(PRODUCT_NAMES[category] || PRODUCT_NAMES.OTHER);
+}
+
+// ---------------------
+// Appointment utils (mantido teu código)
+// ---------------------
+const TIME_SLOTS = Array.from({ length: (22 - 6) * 2 }, (_, i) => {
+  const hour = 6 + Math.floor(i / 2);
+  const minute = i % 2 === 0 ? 0 : 30;
+  return { hour, minute };
+});
+
+function getWeightedTimeSlot() {
+  const peakMorning = TIME_SLOTS.filter(s => s.hour >= 9 && s.hour <= 12);
+  const peakEvening = TIME_SLOTS.filter(s => s.hour >= 17 && s.hour <= 20);
+
+  const rand = Math.random();
+
+  if (rand < 0.4) return getRandomItem(peakMorning);
+  if (rand < 0.7) return getRandomItem(peakEvening);
+  return getRandomItem(TIME_SLOTS);
+}
+
+const CANCEL_REASONS = [
+  "NO_SHOW",
+  "SCHEDULE_CONFLICT",
+  "ILLNESS",
+  "EMERGENCY",
+  "PROFESSIONAL_UNAVAILABLE",
+  "OTHER",
+];
+
+function getWeightedPaymentMethod() {
+  const rand = Math.random();
+
+  if (rand < 0.5) return "PIX";
+  if (rand < 0.75) return "DEBIT";
+  if (rand < 0.9) return "CREDIT";
+  return "CASH";
+}
+
+// ---------------------
+// Appointment generator
+// ---------------------
+function generateAppointment({
+  date,
+  services,
+  employees,
+  clients,
+  companyId,
+  isFuture
+}) {
+  const service = getRandomItem(services);
+  const employee = getRandomItem(employees);
+  const client = getRandomItem(clients);
+
+  const start = new Date(date);
+  const slot = getWeightedTimeSlot();
+
+  start.setHours(slot.hour, slot.minute, 0, 0);
+
+  const end = new Date(start);
+  end.setMinutes(end.getMinutes() + service.duration_minutes);
+
+  if (end.getHours() > 22) return null;
+
+  let status;
+  let cancel_reason = null;
+  let payment_method = null;
+
+  if (isFuture) {
+    status = Math.random() < 0.7 ? "CONFIRMED" : "PENDING";
+  } else {
+    const rand = Math.random();
+
+    if (rand < 0.6) {
+      status = "COMPLETED";
+      payment_method = getWeightedPaymentMethod();
+    } else if (rand < 0.8) {
+      status = "CANCELED";
+      cancel_reason = getRandomItem(CANCEL_REASONS);
+    } else {
+      status = "CONFIRMED";
+    }
+  }
+
+  return {
+    company_id: companyId,
+    service_id: service.id,
+    employee_id: employee.id,
+    client_id: client.id,
+    start_time: start,
+    end_time: end,
+    status,
+    cancel_reason,
+    payment_method,
+  };
+}
+
+// ---------------------
+// MAIN
+// ---------------------
+async function main() {
+  const password = await bcrypt.hash("123456", 10);
+
   const company = await prisma.company.create({
     data: {
       legal_name: "Empresa LTDA",
@@ -20,9 +148,25 @@ async function main() {
       password,
       status: "APPROVED",
     },
-  })
+  });
 
-  // Funcionários
+  const admin = await prisma.user.create({
+    data: {
+      name: "Admin",
+      email: "admin@empresa.com",
+      password,
+      phone: "51999999999",
+    },
+  });
+
+  await prisma.companyUser.create({
+    data: {
+      company_id: company.id,
+      user_id: admin.id,
+      role: "MANAGER",
+    },
+  });
+
   const employees = await Promise.all(
     Array.from({ length: 3 }).map((_, i) =>
       prisma.user.create({
@@ -34,11 +178,20 @@ async function main() {
         },
       })
     )
-  )
+  );
 
-  // Clientes
+  for (const emp of employees) {
+    await prisma.companyUser.create({
+      data: {
+        company_id: company.id,
+        user_id: emp.id,
+        role: "EMPLOYEE",
+      },
+    });
+  }
+
   const clients = await Promise.all(
-    Array.from({ length: 20 }).map((_, i) =>
+    Array.from({ length: 30 }).map((_, i) =>
       prisma.user.create({
         data: {
           name: `Cliente ${i + 1}`,
@@ -48,130 +201,116 @@ async function main() {
         },
       })
     )
-  )
+  );
 
-  // Relaciona funcionários à empresa
-  for (const emp of employees) {
-    await prisma.companyUser.create({
-      data: {
-        company_id: company.id,
-        user_id: emp.id,
-        role: "EMPLOYEE",
-      },
-    })
-  }
-
-  // Serviços
+  // ---------------------
+  // SERVICES
+  // ---------------------
   const services = await Promise.all([
     prisma.service.create({
       data: {
         company_id: company.id,
-        name: "Corte de cabelo",
+        name: "Corte",
+        category: "HAIR",
         duration_minutes: 30,
         price: 50,
+        commission: 40,
       },
     }),
     prisma.service.create({
       data: {
         company_id: company.id,
         name: "Barba",
-        duration_minutes: 20,
+        category: "BEARD",
+        duration_minutes: 30,
         price: 30,
+        commission: 30,
       },
     }),
     prisma.service.create({
       data: {
         company_id: company.id,
-        name: "Corte + Barba",
-        duration_minutes: 50,
-        price: 70,
-      },
-    }),
-    prisma.service.create({
-      data: {
-        company_id: company.id,
-        name: "Progressiva",
-        duration_minutes: 120,
-        price: 200,
-      },
-    }),
-    prisma.service.create({
-      data: {
-        company_id: company.id,
-        name: "Hidratação",
+        name: "Combo (Corte + Barba)",
+        category: "HAIR",
         duration_minutes: 60,
-        price: 80,
+        price: 70,
+        commission: 45,
       },
     }),
-  ])
+  ]);
 
-  const now = new Date()
+  // ---------------------
+  // 🧴 PRODUCTS (NOVO)
+  // ---------------------
+  const productCategories = ["HAIR", "BEARD", "AESTHETIC", "BEAUTY"];
 
-  // Gerar agendamentos (últimos 6 meses + futuros)
-  const appointments = []
+  const products = await Promise.all(
+    productCategories.flatMap((category) =>
+      Array.from({ length: 2 }).map(() =>
+        prisma.product.create({
+          data: {
+            company_id: company.id,
+            name: getRandomProduct(category),
+            category,
+            quantity: randomBetween(5, 50),
+            cost_price: Number((Math.random() * 20 + 5).toFixed(2)),
+          },
+        })
+      )
+    )
+  );
 
-  for (let i = 0; i < 200; i++) {
-    const randomDaysAgo = Math.floor(Math.random() * 180) // últimos 6 meses
-    const date = new Date()
-    date.setDate(date.getDate() - randomDaysAgo)
+  // ---------------------
+  // APPOINTMENTS
+  // ---------------------
+  const appointments = [];
+  const today = new Date();
 
-    const service = services[Math.floor(Math.random() * services.length)]
-    const employee = employees[Math.floor(Math.random() * employees.length)]
-    const client = clients[Math.floor(Math.random() * clients.length)]
+  for (let m = 0; m < 6; m++) {
+    const baseDate = new Date();
+    baseDate.setDate(1);
+    baseDate.setMonth(today.getMonth() - m);
 
-    const start = new Date(date)
-    start.setHours(9 + Math.floor(Math.random() * 8))
+    const year = baseDate.getFullYear();
+    const month = baseDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    const end = new Date(start)
-    end.setMinutes(end.getMinutes() + service.duration_minutes)
+    let monthAppointments = [];
 
-    const statuses = ["COMPLETED", "CANCELED", "CONFIRMED"]
-    const status = statuses[Math.floor(Math.random() * statuses.length)]
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
 
-    appointments.push({
-      company_id: company.id,
-      service_id: service.id,
-      employee_id: employee.id,
-      client_id: client.id,
-      start_time: start,
-      end_time: end,
-      status,
-    })
-  }
+      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+      const activityChance = isWeekend ? 0.4 : 0.75;
 
-  // Próximos agendamentos (pra dashboard)
-  for (let i = 1; i <= 5; i++) {
-    const date = new Date()
-    date.setDate(date.getDate() + i)
+      if (Math.random() > activityChance) continue;
 
-    const service = services[0]
-    const employee = employees[0]
-    const client = clients[i]
+      const count = isWeekend ? randomBetween(4, 10) : randomBetween(8, 20);
 
-    const start = new Date(date)
-    start.setHours(10)
+      for (let i = 0; i < count; i++) {
+        const apt = generateAppointment({
+          date,
+          services,
+          employees,
+          clients,
+          companyId: company.id,
+          isFuture: false,
+        });
 
-    const end = new Date(start)
-    end.setMinutes(end.getMinutes() + service.duration_minutes)
+        if (apt) monthAppointments.push(apt);
+      }
+    }
 
-    appointments.push({
-      company_id: company.id,
-      service_id: service.id,
-      employee_id: employee.id,
-      client_id: client.id,
-      start_time: start,
-      end_time: end,
-      status: "CONFIRMED",
-    })
+    appointments.push(...monthAppointments);
   }
 
   await prisma.appointment.createMany({
     data: appointments,
-  })
+  });
 
-  console.log("🌱 Seed finalizado!")
+  console.log("🌱 Seed completo: serviços + produtos + agendamentos gerados!");
 }
 
 main()
   .catch(console.error)
-  .finally(() => prisma.$disconnect())
+  .finally(() => prisma.$disconnect());

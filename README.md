@@ -349,6 +349,12 @@ Os models são feitos utilizando o Prisma ORM, que pode ser configurado de acord
   </tr>
 
   <tr>
+    <td><code>GET /api/companies/:id/data</code></td>
+    <td>No Body</td>
+    <td><pre><code>//// atualizar com a response certa</code></pre></td>
+  </tr>
+
+  <tr>
     <td><code>PATCH /api/companies/:id</code></td>
     <td>
       <pre><code>{
@@ -760,7 +766,6 @@ Utilizada para configurar os horários bloqueados de funcionários
 | name |	String |	Nome do serviço |	NOT NULL |
 | description |	String |	Descrição |	NULL |
 | duration_minutes |	Int |	Duração em minutos |	NOT NULL |
-| buffer_minutes |	Int |	Tempo extra entre atendimentos |	NOT NULL, DEFAULT (0) |
 | price |	Decimal |	Preço |	NOT NULL |
 | status |	enum |	Status (ACTIVE, DISABLED) |	NOT NULL, DEFAULT (ACTIVE) |
 | created_at | DateTime | Data de criação | NOT NULL, DEFAUT (now()) |
@@ -788,7 +793,6 @@ Utilizada para configurar os horários bloqueados de funcionários
 			"name": "Corte de cabelo",
 			"description": null,
 			"duration_minutes": 30,
-			"buffer_minutes": 0,
 			"price": "50",
 			"status": "ACTIVE",
 			"created_at": "2026-04-13T21:58:46.449Z",
@@ -809,7 +813,6 @@ Utilizada para configurar os horários bloqueados de funcionários
 		"name": "Corte de cabelo",
 		"description": null,
 		"duration_minutes": 30,
-		"buffer_minutes": 0,
 		"price": "50",
 		"status": "ACTIVE",
 		"created_at": "2026-04-13T21:58:46.449Z",
