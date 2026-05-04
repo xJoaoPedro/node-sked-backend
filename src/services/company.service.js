@@ -85,24 +85,39 @@ export class CompanyService {
         process.env.JWT_SECRET,
         { expiresIn: "1h" },
       ),
-      id: company.id
+      id: company.id,
+
     } 
   }
 
   async getAllData(id) {
-    const dashboard = await this.getDashboard(id)   
-
-    const dailySchedules = await this.getDailySchedules(id)
-
-    const appointments = await this.getAppointments(id)
-
-    const cancellations = await this.getInitialCancellations(id)
-
-    const revenue = await this.getInitialRevenues(id)
-
-    const products = await this.getProducts(id)
-
-    const services = await this.getServices(id)
+    const [
+      dashboard,
+      dailySchedules,
+      appointments,
+      cancellations,
+      revenue,
+      // commissions
+      // reports
+      products,
+      services,
+      professionals,
+      // customers
+      // settings
+    ] = await Promise.all([
+      this.getDashboard(id),
+      this.getDailySchedules(id),
+      this.getAppointments(id),
+      this.getInitialCancellations(id),
+      this.getInitialRevenues(id),
+      // commissions
+      // reports
+      this.getProducts(id),
+      this.getServices(id),
+      this.getProfessionals(id),
+      // customers
+      // settings
+    ])
 
     return {
       dashboard,
@@ -114,7 +129,7 @@ export class CompanyService {
       // reports
       products,
       services,
-      // professionals
+      professionals,
       // customers
       // settings
     }
@@ -1028,5 +1043,22 @@ export class CompanyService {
       lowStock,
       outOfStock,
     };
+  }
+
+  async getProfessionals(id) {
+    const professionals = await prisma.employee.findMany({
+      where: {
+        company_id: id,
+      },
+      include: {
+        services: true,
+        scheduleOpenings: true
+      },
+    });
+
+    return professionals.map(p => ({
+      ...p,
+      services: p.services.map(s => s.service_id)
+    }));
   }
 }

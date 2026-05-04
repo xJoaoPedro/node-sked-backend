@@ -123,7 +123,7 @@ function generateAppointment({
   return {
     company_id: companyId,
     service_id: service.id,
-    employee_id: employee.id, // 🔥 agora é Employee
+    employee_id: employee.id,
     client_id: client.id,
     start_time: start,
     end_time: end,
@@ -151,24 +151,13 @@ async function main() {
     },
   });
 
-  // ADMIN (vira MANAGER via Employee)
+  // ADMIN
   const adminUser = await prisma.user.create({
     data: {
       name: "Admin",
       email: "admin@empresa.com",
       password,
       phone: "51999999999",
-    },
-  });
-
-  const adminEmployee = await prisma.employee.create({
-    data: {
-      company_id: company.id,
-      user_id: adminUser.id,
-      name: adminUser.name,
-      email: adminUser.email,
-      phone: adminUser.phone,
-      role: "MANAGER",
     },
   });
 
@@ -197,6 +186,33 @@ async function main() {
     });
 
     employees.push(employee);
+  }
+
+  // 🔥 ADIÇÃO: ScheduleOpening
+  const shifts = ["MORNING", "AFTERNOON", "NIGHT"];
+
+  const SHIFTS = {
+    MORNING: { start: 6, end: 12 },
+    AFTERNOON: { start: 12, end: 18 },
+    NIGHT: { start: 18, end: 22 },
+  };
+
+  for (let i = 0; i < employees.length; i++) {
+    const employee = employees[i];
+    const shiftKey = shifts[i % shifts.length];
+    const shift = SHIFTS[shiftKey];
+
+    for (let weekDay = 1; weekDay <= 5; weekDay++) {
+      await prisma.scheduleOpening.create({
+        data: {
+          company_id: company.id,
+          employee_id: employee.id,
+          week_day: weekDay,
+          start_time: new Date(`1970-01-01T${String(shift.start).padStart(2, "0")}:00:00`),
+          end_time: new Date(`1970-01-01T${String(shift.end).padStart(2, "0")}:00:00`),
+        },
+      });
+    }
   }
 
   // CLIENTS
@@ -247,7 +263,7 @@ async function main() {
     }),
   ]);
 
-  // 🔥 vínculo N:N Employee ↔ Service
+  // RELAÇÃO N:N
   for (const employee of employees) {
     for (const service of services) {
       if (Math.random() > 0.3) {
@@ -326,7 +342,7 @@ async function main() {
     data: appointments,
   });
 
-  console.log("🌱 Seed atualizado com Employee + serviços + agendamentos!");
+  console.log("🌱 Seed completo com ScheduleOpening!");
 }
 
 main()

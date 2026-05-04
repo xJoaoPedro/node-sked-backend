@@ -36,11 +36,15 @@ companiesRouter.get('/:id/revenue/summary', controller.getInitialRevenues);
 
 // TODO DOCUMENTAR ESSA BOMBA
 // GET /:id/services (todos os servicos de uma empresa)
-companiesRouter.get('/:id/revenue', controller.getServices);
+companiesRouter.get('/:id/services', controller.getServices);
 
 // TODO DOCUMENTAR ESSA BOMBA
 // GET /:id/products (todos as infos de produtos de uma empresa)
 companiesRouter.get('/:id/products', controller.getProducts);
+
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/professionals (todos as infos de profissionais de uma empresa)
+companiesRouter.get('/:id/professionals', controller.getProfessionals);
 
 // PATCH /:id
 companiesRouter.patch("/:id", controller.update);

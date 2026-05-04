@@ -208,4 +208,21 @@ export default class CompanyController {
       data: services,
     });
   }
+
+  async getProfessionals(req, res) {
+    const id = Number(req.params.id);
+    
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const services = await service.getProfessionals(id);
+
+    res.status(200).json({
+      message: "Profissionais encontrados com sucesso!",
+      data: services,
+    });
+  }
 }
