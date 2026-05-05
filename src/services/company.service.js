@@ -653,17 +653,18 @@ export class CompanyService {
       // 🔹 por profissional
       prisma.$queryRaw`
         SELECT 
-          u.name,
-          COUNT(a.id)::int as cancellations,
-          (SELECT COUNT(*) FROM appointments a2 WHERE a2.employee_id = a.employee_id AND a2.company_id = ${id} AND a2.start_time >= ${startDate} AND a2.start_time <= ${now})::int as total
-        FROM appointments a
-        JOIN users u ON u.id = a.employee_id
-        WHERE a.company_id = ${id}
-          AND a.status = 'CANCELED'
+          e.name,
+          COUNT(a.id) FILTER (WHERE a.status = 'CANCELED')::int as cancellations,
+          COUNT(a.id)::int as total
+        FROM employees e
+        LEFT JOIN appointments a
+          ON a.employee_id = e.id
+          AND a.company_id = ${id}
           AND a.start_time >= ${startDate}
           AND a.start_time <= ${now}
-        GROUP BY u.name, a.employee_id
-        ORDER BY cancellations DESC
+        WHERE e.company_id = ${id}
+        GROUP BY e.id, e.name
+        ORDER BY cancellations DESC, e.name ASC
       `,
 
       // 🔹 por motivo
