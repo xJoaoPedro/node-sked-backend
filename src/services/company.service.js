@@ -8,6 +8,21 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 export class CompanyService {
+  getPeriodStartDate(time = 'month', now = new Date()) {
+    const periodsInDays = {
+      week: 7,
+      month: 30,
+      '3months': 90,
+      year: 365,
+    };
+
+    const days = periodsInDays[time] ?? periodsInDays.month;
+    const startDate = new Date(now);
+    startDate.setDate(now.getDate() - days);
+
+    return startDate;
+  }
+
   async findAll() {
     return await prisma.company.findMany();
   }
@@ -517,45 +532,16 @@ export class CompanyService {
   async getCancellations(id, page = 1, limit = 50, time = 'month') {
     page = Number(page);
     const now = new Date();
-
-    const getStartDate = (time) => {
-      switch (time) {
-        case 'week': {
-          const d = new Date(now);
-          d.setDate(now.getDate() - 7);
-          return d;
-        }
-
-        case 'month': {
-          const d = new Date(now);
-          d.setDate(now.getDate() - 30);
-          return d;
-        }
-
-        case '3months': {
-          const d = new Date(now);
-          d.setDate(now.getDate() - 90);
-          return d;
-        }
-
-        case 'year': {
-          const d = new Date(now);
-          d.setDate(now.getDate() - 365);
-          return d;
-        }
-
-        default:
-          return new Date(now.getFullYear(), now.getMonth(), 1);
-      }
-    };
-
-    const startDate = getStartDate(time);
+    const startDate = this.getPeriodStartDate(time, now);
 
 
     const where = {
       company_id: id,
       status: "CANCELED",
-      ...(startDate && { start_time: { gte: startDate } }),
+      start_time: {
+        gte: startDate,
+        lte: now,
+      },
     };
 
     const [cancellations, total] = await Promise.all([
@@ -591,39 +577,7 @@ export class CompanyService {
 
   async getInitialCancellations(id, page = 1, limit = 50, time = 'month') {
     const now = new Date();
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-    const getStartDate = (time) => {
-      switch (time) {
-        case 'week': {
-          const d = new Date(now);
-          d.setDate(now.getDate() - 7);
-          return d;
-        }
-
-        case 'month': {
-          const d = new Date(now);
-          d.setDate(now.getDate() - 30);
-          return d;
-        }
-
-        case '3months': {
-          const d = new Date(now);
-          d.setDate(now.getDate() - 90);
-          return d;
-        }
-
-        case 'year': {
-          const d = new Date(now);
-          d.setDate(now.getDate() - 365);
-          return d;
-        }
-
-        default:
-          return new Date(now.getFullYear(), now.getMonth(), 1);
-      }
-    };
-
-    const startDate = getStartDate(time);
+    const startDate = this.getPeriodStartDate(time, now);
 
     const [
       totalCancellations,
@@ -640,7 +594,7 @@ export class CompanyService {
         where: {
           company_id: id,
           status: "CANCELED",
-          start_time: { gte: startDate },
+          start_time: { gte: startDate, lte: now },
         },
       }),
 
@@ -648,7 +602,7 @@ export class CompanyService {
       prisma.appointment.count({
         where: {
           company_id: id,
-          start_time: { gte: startDate },
+          start_time: { gte: startDate, lte: now },
         },
       }),
 
@@ -660,6 +614,7 @@ export class CompanyService {
         WHERE a.company_id = ${id}
           AND a.status = 'CANCELED'
           AND a.start_time >= ${startDate}
+          AND a.start_time <= ${now}
       `,
 
       // 🔹 gráfico (fixo 6 meses)
@@ -690,6 +645,7 @@ export class CompanyService {
         WHERE a.company_id = ${id}
           AND a.status = 'CANCELED'
           AND a.start_time >= ${startDate}
+          AND a.start_time <= ${now}
         GROUP BY s.name
         ORDER BY total DESC
       `,
@@ -699,12 +655,13 @@ export class CompanyService {
         SELECT 
           u.name,
           COUNT(a.id)::int as cancellations,
-          (SELECT COUNT(*) FROM appointments a2 WHERE a2.employee_id = a.employee_id AND a2.company_id = ${id} AND a2.start_time >= ${startDate})::int as total
+          (SELECT COUNT(*) FROM appointments a2 WHERE a2.employee_id = a.employee_id AND a2.company_id = ${id} AND a2.start_time >= ${startDate} AND a2.start_time <= ${now})::int as total
         FROM appointments a
         JOIN users u ON u.id = a.employee_id
         WHERE a.company_id = ${id}
           AND a.status = 'CANCELED'
           AND a.start_time >= ${startDate}
+          AND a.start_time <= ${now}
         GROUP BY u.name, a.employee_id
         ORDER BY cancellations DESC
       `,
@@ -719,6 +676,7 @@ export class CompanyService {
           AND a.status = 'CANCELED'
           AND a.cancel_reason IS NOT NULL
           AND a.start_time >= ${startDate}
+          AND a.start_time <= ${now}
         GROUP BY a.cancel_reason
         ORDER BY total DESC
       `,
@@ -728,7 +686,7 @@ export class CompanyService {
         where: {
           company_id: id,
           status: "CANCELED",
-          start_time: { gte: startDate },
+          start_time: { gte: startDate, lte: now },
         },
         skip: (page - 1) * Number(limit),
         take: Number(limit),
@@ -810,26 +768,17 @@ export class CompanyService {
 
   async getRevenues(id, page = 1, limit = 50, time = 'month') {
     page = Number(page);
-    let startDate = null;
-
     const now = new Date();
-
-    if (time === 'week') {
-      startDate = new Date();
-      startDate.setDate(now.getDate() - 7);
-    } else if (time === 'month') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    } else if (time === '3months') {
-      startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-    } else if (time === 'year') {
-      startDate = new Date(now.getFullYear(), 0, 1);
-    }
+    const startDate = this.getPeriodStartDate(time, now);
 
     const where = {
       company_id: id,
       status: { in: ["COMPLETED", "PENDING"] },
       payment_method: { not: null },
-      ...(startDate && { start_time: { gte: startDate } }),
+      start_time: {
+        gte: startDate,
+        lte: now,
+      },
     };
 
     const [payments, total] = await Promise.all([
@@ -869,27 +818,7 @@ export class CompanyService {
   async getInitialRevenues(id, page = 1, limit = 50, time = 'month') {
     const now = new Date();
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-    const getStartDate = (time) => {
-      switch (time) {
-        case 'week': {
-          const d = new Date(now);
-          d.setDate(now.getDate() - 7);
-          return d;
-        }
-        case 'month':
-          return new Date(now.getFullYear(), now.getMonth(), 1);
-        case '3months':
-          return new Date(now.getFullYear(), now.getMonth() - 2, 1);
-        case '6months':
-          return new Date(now.getFullYear(), now.getMonth() - 5, 1);
-        case 'year':
-          return new Date(now.getFullYear(), 0, 1);
-        default:
-          return new Date(now.getFullYear(), now.getMonth(), 1);
-      }
-    };
-
-    const startDate = getStartDate(time);
+    const startDate = this.getPeriodStartDate(time, now);
 
     const [
       revenueReceivedRaw,
@@ -907,6 +836,7 @@ export class CompanyService {
         WHERE a.company_id = ${id}
           AND a.status = 'COMPLETED'
           AND a.start_time >= ${startDate}
+          AND a.start_time <= ${now}
       `,
 
       // ⏳ receita pendente
@@ -917,6 +847,7 @@ export class CompanyService {
         WHERE a.company_id = ${id}
           AND a.status IN ('PENDING', 'CONFIRMED')
           AND a.start_time >= ${startDate}
+          AND a.start_time <= ${now}
       `,
 
       // 🔢 nº de transações pagas
@@ -924,7 +855,7 @@ export class CompanyService {
         where: {
           company_id: id,
           status: "COMPLETED",
-          start_time: { gte: startDate },
+          start_time: { gte: startDate, lte: now },
         },
       }),
 
@@ -953,6 +884,7 @@ export class CompanyService {
           AND a.status = 'COMPLETED'
           AND a.payment_method IS NOT NULL
           AND a.start_time >= ${startDate}
+          AND a.start_time <= ${now}
         GROUP BY a.payment_method
       `,
 
@@ -962,7 +894,7 @@ export class CompanyService {
           company_id: id,
           status: { in: ["COMPLETED", "PENDING"], },
           payment_method: { not: null },
-          start_time: { gte: startDate },
+          start_time: { gte: startDate, lte: now },
         },
         orderBy: { start_time: "desc" },
         include: {
