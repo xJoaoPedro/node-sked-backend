@@ -23,6 +23,78 @@ export class CompanyService {
     return startDate;
   }
 
+  async getCustomerSummaryMetrics(id) {
+    const startDate = this.getPeriodStartDate('month');
+
+    const [totalsRaw, returningCustomersRaw] = await Promise.all([
+      prisma.$queryRaw`
+        SELECT
+          COUNT(*)::int AS total_customers,
+          COUNT(*) FILTER (WHERE first_visit >= ${startDate})::int AS new_customers
+        FROM (
+          SELECT
+            a.client_id,
+            MIN(a.start_time) AS first_visit
+          FROM appointments a
+          WHERE a.company_id = ${id}
+            AND a.status = 'COMPLETED'
+          GROUP BY a.client_id
+        ) customer_visits
+      `,
+
+      prisma.$queryRaw`
+        SELECT COUNT(*)::int AS total
+        FROM (
+          SELECT a.client_id
+          FROM appointments a
+          WHERE a.company_id = ${id}
+            AND a.status = 'COMPLETED'
+          GROUP BY a.client_id
+          HAVING COUNT(a.id) > 1
+        ) returning_customers
+      `,
+    ]);
+
+    return {
+      totalCustomers: Number(totalsRaw[0]?.total_customers || 0),
+      newCustomers: Number(totalsRaw[0]?.new_customers || 0),
+      returningCustomers: Number(returningCustomersRaw[0]?.total || 0),
+    };
+  }
+
+  async getCustomerList(id, page = 1, limit = 50) {
+    const customersRaw = await prisma.$queryRaw`
+      SELECT
+        cc.customer_id AS id,
+        c.name,
+        c.phone,
+        COUNT(a.id) FILTER (WHERE a.status = 'COMPLETED')::int AS completed_appointments,
+        MAX(a.start_time) FILTER (WHERE a.status = 'COMPLETED') AS last_visit
+      FROM company_customers cc
+      JOIN customers c
+        ON c.id = cc.customer_id
+      LEFT JOIN appointments a
+        ON a.company_id = cc.company_id
+        AND a.client_id = cc.customer_id
+      WHERE cc.company_id = ${id}
+      GROUP BY cc.customer_id, c.name, c.phone
+      HAVING COUNT(a.id) FILTER (WHERE a.status = 'COMPLETED') > 0
+      ORDER BY last_visit DESC, c.name ASC
+      OFFSET ${(page - 1) * limit}
+      LIMIT ${limit}
+    `;
+
+    return customersRaw.map((customer) => ({
+      id: Number(customer.id),
+      name: customer.name,
+      contact: customer.phone,
+      visits: Number(customer.completed_appointments),
+      lastVisit: customer.last_visit
+        ? customer.last_visit.toISOString()
+        : null,
+    }));
+  }
+
   async findAll() {
     return await prisma.company.findMany();
   }
@@ -117,7 +189,7 @@ export class CompanyService {
       products,
       services,
       professionals,
-      // customers
+      customers,
       // settings
     ] = await Promise.all([
       this.getDashboard(id),
@@ -130,7 +202,7 @@ export class CompanyService {
       this.getProducts(id),
       this.getServices(id),
       this.getProfessionals(id),
-      // customers
+      this.getInitialCustomers(id),
       // settings
     ])
 
@@ -145,7 +217,7 @@ export class CompanyService {
       products,
       services,
       professionals,
-      // customers
+      customers
       // settings
     }
   }
@@ -993,5 +1065,40 @@ export class CompanyService {
       ...p,
       services: p.services.map(s => s.service_id)
     }));
+  }
+
+  async getInitialCustomers(id, limit = 50) {
+    const page = 1;
+    limit = Number(limit);
+
+    const [{ totalCustomers, newCustomers, returningCustomers }, customers] = await Promise.all([
+      this.getCustomerSummaryMetrics(id),
+      this.getCustomerList(id, page, limit),
+    ]);
+
+    return {
+      totalCustomers,
+      newCustomers,
+      returningCustomers,
+      customers
+    };
+  }
+
+  async getCustomers(id, page = 1, limit = 50) {
+    page = Number(page);
+    limit = Number(limit);
+
+    const [{ totalCustomers }, customers] = await Promise.all([
+      this.getCustomerSummaryMetrics(id),
+      this.getCustomerList(id, page, limit),
+    ]);
+
+    return {
+      page,
+      limit,
+      total: totalCustomers,
+      totalPages: Math.ceil(totalCustomers / limit),
+      data: customers,
+    };
   }
 }

@@ -75,6 +75,30 @@ function getWeightedPaymentMethod() {
   return "CASH";
 }
 
+function selectClientForAppointment({ recurringClients, oneTimeClients, appointmentCounts }) {
+  const availableOneTimeClients = oneTimeClients.filter(
+    (client) => (appointmentCounts.get(client.id) || 0) === 0
+  );
+
+  const shouldUseOneTimeClient =
+    availableOneTimeClients.length > 0 && Math.random() < 0.35;
+
+  const client = shouldUseOneTimeClient
+    ? getRandomItem(availableOneTimeClients)
+    : getRandomItem(recurringClients);
+
+  appointmentCounts.set(client.id, (appointmentCounts.get(client.id) || 0) + 1);
+
+  return client;
+}
+
+function randomDateBetween(start, end) {
+  const startTime = start.getTime();
+  const endTime = end.getTime();
+
+  return new Date(startTime + Math.random() * (endTime - startTime));
+}
+
 // ---------------------
 // Appointment generator
 // ---------------------
@@ -82,13 +106,12 @@ function generateAppointment({
   date,
   services,
   employees,
-  clients,
+  client,
   companyId,
   isFuture
 }) {
   const service = getRandomItem(services);
   const employee = getRandomItem(employees);
-  const client = getRandomItem(clients);
 
   const start = new Date(date);
   const slot = getWeightedTimeSlot();
@@ -216,18 +239,50 @@ async function main() {
   }
 
   // CLIENTS
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(now.getDate() - 30);
+
+  const sixMonthsAgo = new Date(now);
+  sixMonthsAgo.setMonth(now.getMonth() - 6);
+
+  const customerSeedData = Array.from({ length: 80 }).map((_, i) => {
+    const createdAt = i < 22
+      ? randomDateBetween(thirtyDaysAgo, now)
+      : randomDateBetween(sixMonthsAgo, thirtyDaysAgo);
+
+    return {
+      name: `Cliente ${i + 1}`,
+      phone: `51988${String(i + 1).padStart(6, "0")}`,
+      createdAt,
+    };
+  });
+
   const clients = await Promise.all(
-    Array.from({ length: 30 }).map((_, i) =>
-      prisma.user.create({
+    customerSeedData.map((customer) =>
+      prisma.customer.create({
         data: {
-          name: `Cliente ${i + 1}`,
-          email: `cliente${i + 1}@mail.com`,
-          password,
-          phone: "51988888888",
+          name: customer.name,
+          phone: customer.phone,
+          created_at: customer.createdAt,
+          updated_at: customer.createdAt,
         },
       })
     )
   );
+
+  await prisma.companyCustomer.createMany({
+    data: clients.map((client, index) => ({
+      company_id: company.id,
+      customer_id: client.id,
+      created_at: customerSeedData[index].createdAt,
+      updated_at: customerSeedData[index].createdAt,
+    })),
+  });
+
+  const recurringClients = clients.slice(0, 24);
+  const oneTimeClients = clients.slice(24);
+  const appointmentCounts = new Map();
 
   // SERVICES
   const services = await Promise.all([
@@ -298,7 +353,7 @@ async function main() {
 
   // APPOINTMENTS
   const appointments = [];
-  const today = new Date();
+  const today = now;
 
   for (let m = 0; m < 6; m++) {
     const baseDate = new Date();
@@ -322,11 +377,17 @@ async function main() {
       const count = isWeekend ? randomBetween(4, 10) : randomBetween(8, 20);
 
       for (let i = 0; i < count; i++) {
+        const client = selectClientForAppointment({
+          recurringClients,
+          oneTimeClients,
+          appointmentCounts,
+        });
+
         const apt = generateAppointment({
           date,
           services,
           employees,
-          clients,
+          client,
           companyId: company.id,
           isFuture: false,
         });

@@ -225,4 +225,40 @@ export default class CompanyController {
       data: services,
     });
   }
+
+  async getCustomers(req, res) {
+    const id = Number(req.params.id);
+    const { page = 1, limit = 50 } = req.query;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const customers = await service.getCustomers(id, page, limit);
+
+    res.status(200).json({
+      message: "Clientes encontrados com sucesso!",
+      data: customers,
+    });
+  }
+
+  async getInitialCustomers(req, res) {
+    const id = Number(req.params.id);
+    const { limit = 50 } = req.query;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const customers = await service.getInitialCustomers(id, limit);
+
+    res.status(200).json({
+      message: "Clientes encontrados com sucesso!",
+      data: customers,
+    });
+  }
 }

@@ -19,8 +19,6 @@ model User {
 
   // relações
   employee             Employee?
-  appointmentClients   Appointment[]     @relation("client")
-  botInteractions      BotInteraction[]
 
   @@map("users")
 }
@@ -50,8 +48,39 @@ model Company {
   services         Service[]
   signatures       Signature[]
   products         Product[]
+  customers        CompanyCustomer[]
 
   @@map("companies")  
+}
+
+model Customer {
+  id                 Int               @id @default(autoincrement())
+  name               String            @db.VarChar(255)
+  phone              String            @unique @db.VarChar(11)
+  created_at         DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime          @updatedAt @db.Timestamptz(6)
+
+  companies          CompanyCustomer[]
+  appointmentClients Appointment[]     @relation("client")
+  botInteractions    BotInteraction[]
+
+  @@map("customers")
+}
+
+model CompanyCustomer {
+  id          Int      @id @default(autoincrement())
+  company_id  Int
+  customer_id Int
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @updatedAt @db.Timestamptz(6)
+
+  company     Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  customer    Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@unique([company_id, customer_id])
+  @@index([company_id])
+  @@index([customer_id])
+  @@map("company_customers")
 }
 
 model Employee {
@@ -179,7 +208,7 @@ model Appointment {
   created_at     DateTime           @default(now()) @db.Timestamptz(6)
   updated_at     DateTime           @updatedAt @db.Timestamptz(6)
 
-  client   User     @relation("client", fields: [client_id], references: [id], onDelete: Cascade)
+  client   Customer @relation("client", fields: [client_id], references: [id], onDelete: Cascade)
   company  Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
   employee Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade)
   service  Service  @relation(fields: [service_id], references: [id], onDelete: Cascade)
@@ -199,8 +228,8 @@ model BotInteraction {
   created_at DateTime                    @default(now()) @db.Timestamptz(6)
   updated_at DateTime                    @updatedAt @db.Timestamptz(6)
 
-  client     User    @relation(fields: [client_id], references: [id], onDelete: Cascade)
-  company    Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  client     Customer @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  company    Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
 
   @@index([company_id])
   @@index([client_id])

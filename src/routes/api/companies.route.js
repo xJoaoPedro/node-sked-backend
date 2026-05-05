@@ -46,6 +46,14 @@ companiesRouter.get('/:id/products', controller.getProducts);
 // GET /:id/professionals (todos as infos de profissionais de uma empresa)
 companiesRouter.get('/:id/professionals', controller.getProfessionals);
 
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/customers (todos os clientes de uma empresa)
+companiesRouter.get('/:id/customers', controller.getCustomers);
+
+// TODO DOCUMENTAR ESSA BOMBA
+// GET /:id/customers/summary (todas as infos de clientes de uma empresa)
+companiesRouter.get('/:id/customers/summary', controller.getInitialCustomers);
+
 // PATCH /:id
 companiesRouter.patch("/:id", controller.update);
 
