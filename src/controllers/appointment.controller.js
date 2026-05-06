@@ -1,4 +1,7 @@
-import { AppointmentService } from "../services/appointment.service.js";
+import {
+  AppointmentConflictError,
+  AppointmentService,
+} from "../services/appointment.service.js";
 import {
   createAppointmentValidator,
   updateAppointmentValidator,
@@ -73,7 +76,23 @@ export default class AppointmentController {
       });
     }
 
-    await service.create(req.body);
+    try {
+      await service.create(req.body);
+    } catch (error) {
+      if (error instanceof AppointmentConflictError) {
+        return res.status(409).json({
+          message: error.message,
+        });
+      }
+
+      if (error instanceof Error) {
+        return res.status(400).json({
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
 
     res.status(204).json();
   }
@@ -88,7 +107,25 @@ export default class AppointmentController {
       });
     }
 
-    const update = await service.update(Number(req.params.id), parsed.data);
+    let update;
+
+    try {
+      update = await service.update(Number(req.params.id), parsed.data);
+    } catch (error) {
+      if (error instanceof AppointmentConflictError) {
+        return res.status(409).json({
+          message: error.message,
+        });
+      }
+
+      if (error instanceof Error) {
+        return res.status(400).json({
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
 
     if (update) return res.status(204).json();
     else

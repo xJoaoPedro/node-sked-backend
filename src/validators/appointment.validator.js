@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const validator = z.object({
+const baseValidator = z.object({
   company_id:   z.coerce.number(),
   service_id:   z.coerce.number(),
   employee_id:  z.coerce.number(),
@@ -11,5 +11,15 @@ const validator = z.object({
   status:       z.enum(["PENDING", "CONFIRMED", "COMPLETED", "CANCELED", "NO_SHOW"]).nullable().optional()
 });
 
-export const createAppointmentValidator = validator;
-export const updateAppointmentValidator = validator.partial();
+export const createAppointmentValidator = baseValidator.refine((data) => data.end_time > data.start_time, {
+  message: "Horário de término deve ser maior que o horário de início",
+  path: ["end_time"],
+});
+
+export const updateAppointmentValidator = baseValidator.partial().refine((data) => {
+  if (!data.start_time || !data.end_time) return true;
+  return data.end_time > data.start_time;
+}, {
+  message: "Horário de término deve ser maior que o horário de início",
+  path: ["end_time"],
+});

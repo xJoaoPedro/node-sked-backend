@@ -57,6 +57,28 @@ function getWeightedTimeSlot() {
   return getRandomItem(TIME_SLOTS);
 }
 
+function getDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function overlaps(startA, endA, startB, endB) {
+  return startA < endB && endA > startB;
+}
+
+function getWeightedTimeSlotFromSlots(slots) {
+  const morningSlots = slots.filter((slot) => slot.hour >= 9 && slot.hour <= 12);
+  const eveningSlots = slots.filter((slot) => slot.hour >= 17 && slot.hour <= 20);
+  const rand = Math.random();
+
+  if (rand < 0.4 && morningSlots.length > 0) return getRandomItem(morningSlots);
+  if (rand < 0.7 && eveningSlots.length > 0) return getRandomItem(eveningSlots);
+  return getRandomItem(slots);
+}
+
 const CANCEL_REASONS = [
   "NO_SHOW",
   "SCHEDULE_CONFLICT",
@@ -108,52 +130,86 @@ function generateAppointment({
   employees,
   client,
   companyId,
-  isFuture
+  isFuture,
+  employeeShiftMap,
+  serviceEmployeeMap,
+  employeeDayAppointments,
 }) {
-  const service = getRandomItem(services);
-  const employee = getRandomItem(employees);
+  for (let attempt = 0; attempt < 25; attempt++) {
+    const service = getRandomItem(services);
+    const eligibleEmployees = serviceEmployeeMap.get(service.id) ?? employees;
+    const employee = getRandomItem(eligibleEmployees);
+    const shift = employeeShiftMap.get(employee.id);
 
-  const start = new Date(date);
-  const slot = getWeightedTimeSlot();
+    if (!shift) continue;
 
-  start.setHours(slot.hour, slot.minute, 0, 0);
+    const availableSlots = TIME_SLOTS.filter((slot) => {
+      const slotStartInMinutes = slot.hour * 60 + slot.minute;
+      const slotEndInMinutes = slotStartInMinutes + service.duration_minutes;
 
-  const end = new Date(start);
-  end.setMinutes(end.getMinutes() + service.duration_minutes);
+      return (
+        slotStartInMinutes >= shift.start * 60 &&
+        slotEndInMinutes <= shift.end * 60
+      );
+    });
 
-  if (end.getHours() > 22) return null;
+    if (availableSlots.length === 0) continue;
 
-  let status;
-  let cancel_reason = null;
-  let payment_method = null;
+    const start = new Date(date);
+    const slot = getWeightedTimeSlotFromSlots(availableSlots);
 
-  if (isFuture) {
-    status = Math.random() < 0.7 ? "CONFIRMED" : "PENDING";
-  } else {
-    const rand = Math.random();
+    start.setHours(slot.hour, slot.minute, 0, 0);
 
-    if (rand < 0.6) {
-      status = "COMPLETED";
-      payment_method = getWeightedPaymentMethod();
-    } else if (rand < 0.8) {
-      status = "CANCELED";
-      cancel_reason = getRandomItem(CANCEL_REASONS);
+    const end = new Date(start);
+    end.setMinutes(end.getMinutes() + service.duration_minutes);
+
+    const dayKey = `${employee.id}:${getDateKey(date)}`;
+    const existingAppointments = employeeDayAppointments.get(dayKey) ?? [];
+    const hasConflict = existingAppointments.some((appointment) =>
+      overlaps(start, end, appointment.start_time, appointment.end_time),
+    );
+
+    if (hasConflict) continue;
+
+    let status;
+    let cancel_reason = null;
+    let payment_method = null;
+
+    if (isFuture) {
+      status = Math.random() < 0.7 ? "CONFIRMED" : "PENDING";
     } else {
-      status = "CONFIRMED";
+      const rand = Math.random();
+
+      if (rand < 0.6) {
+        status = "COMPLETED";
+        payment_method = getWeightedPaymentMethod();
+      } else if (rand < 0.8) {
+        status = "CANCELED";
+        cancel_reason = getRandomItem(CANCEL_REASONS);
+      } else {
+        status = "CONFIRMED";
+      }
     }
+
+    const appointment = {
+      company_id: companyId,
+      service_id: service.id,
+      employee_id: employee.id,
+      client_id: client.id,
+      start_time: start,
+      end_time: end,
+      status,
+      cancel_reason,
+      payment_method,
+    };
+
+    existingAppointments.push(appointment);
+    employeeDayAppointments.set(dayKey, existingAppointments);
+
+    return appointment;
   }
 
-  return {
-    company_id: companyId,
-    service_id: service.id,
-    employee_id: employee.id,
-    client_id: client.id,
-    start_time: start,
-    end_time: end,
-    status,
-    cancel_reason,
-    payment_method,
-  };
+  return null;
 }
 
 // ---------------------
@@ -216,6 +272,7 @@ async function main() {
 
   // 🔥 ADIÇÃO: ScheduleOpening
   const shifts = ["MORNING", "AFTERNOON", "NIGHT"];
+  const employeeShiftMap = new Map();
 
   const SHIFTS = {
     MORNING: { start: 6, end: 12 },
@@ -227,6 +284,7 @@ async function main() {
     const employee = employees[i];
     const shiftKey = shifts[i % shifts.length];
     const shift = SHIFTS[shiftKey];
+    employeeShiftMap.set(employee.id, shift);
 
     for (let weekDay = 1; weekDay <= 5; weekDay++) {
       await prisma.scheduleOpening.create({
@@ -322,6 +380,8 @@ async function main() {
   ]);
 
   // RELAÇÃO N:N
+  const serviceEmployeeMap = new Map();
+
   for (const employee of employees) {
     for (const service of services) {
       if (Math.random() > 0.3) {
@@ -331,7 +391,17 @@ async function main() {
             service_id: service.id,
           },
         });
+
+        const employeeList = serviceEmployeeMap.get(service.id) ?? [];
+        employeeList.push(employee);
+        serviceEmployeeMap.set(service.id, employeeList);
       }
+    }
+  }
+
+  for (const service of services) {
+    if (!serviceEmployeeMap.has(service.id)) {
+      serviceEmployeeMap.set(service.id, employees);
     }
   }
 
@@ -356,6 +426,7 @@ async function main() {
 
   // APPOINTMENTS
   const appointments = [];
+  const employeeDayAppointments = new Map();
   const today = now;
 
   for (let m = 0; m < 6; m++) {
@@ -393,6 +464,9 @@ async function main() {
           client,
           companyId: company.id,
           isFuture: false,
+          employeeShiftMap,
+          serviceEmployeeMap,
+          employeeDayAppointments,
         });
 
         if (apt) monthAppointments.push(apt);

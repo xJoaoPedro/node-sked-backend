@@ -7,7 +7,35 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 const socket = socketServer;
 
+export class AppointmentConflictError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "AppointmentConflictError";
+  }
+}
+
 export class AppointmentService {
+  validateTimeRange(start_time, end_time) {
+    if (start_time >= end_time) {
+      throw new Error("Horário de término deve ser maior que o horário de início");
+    }
+  }
+
+  async hasEmployeeOverlap({ employee_id, start_time, end_time, excludeId }) {
+    const overlappingAppointment = await prisma.appointment.findFirst({
+      where: {
+        employee_id: Number(employee_id),
+        status: { not: "CANCELED" },
+        ...(excludeId ? { id: { not: Number(excludeId) } } : {}),
+        start_time: { lt: end_time },
+        end_time: { gt: start_time },
+      },
+      select: { id: true },
+    });
+
+    return Boolean(overlappingAppointment);
+  }
+
   async findAll() {
     return await prisma.appointment.findMany();
   }
@@ -57,6 +85,20 @@ export class AppointmentService {
       status
     } = appointment;
 
+    this.validateTimeRange(start_time, end_time);
+
+    const hasOverlap = await this.hasEmployeeOverlap({
+      employee_id,
+      start_time,
+      end_time,
+    });
+
+    if (hasOverlap) {
+      throw new AppointmentConflictError(
+        "Já existe um agendamento para este funcionário no horário informado",
+      );
+    }
+
     await prisma.appointment.create({
       data: {
         company_id: Number(company_id),
@@ -77,6 +119,32 @@ export class AppointmentService {
 
   async update(id, data) {
     try {
+      const currentAppointment = await prisma.appointment.findUnique({
+        where: { id },
+      });
+
+      if (!currentAppointment) return false;
+
+      const nextAppointment = {
+        ...currentAppointment,
+        ...data,
+      };
+
+      this.validateTimeRange(nextAppointment.start_time, nextAppointment.end_time);
+
+      const hasOverlap = await this.hasEmployeeOverlap({
+        employee_id: nextAppointment.employee_id,
+        start_time: nextAppointment.start_time,
+        end_time: nextAppointment.end_time,
+        excludeId: id,
+      });
+
+      if (hasOverlap) {
+        throw new AppointmentConflictError(
+          "Já existe um agendamento para este funcionário no horário informado",
+        );
+      }
+
       await prisma.appointment.update({
         where: { id },
         data,
@@ -84,6 +152,10 @@ export class AppointmentService {
 
       return true;
     } catch (error) {
+      if (error instanceof AppointmentConflictError) {
+        throw error;
+      }
+
       return false;
     }
   }
