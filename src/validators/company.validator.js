@@ -12,6 +12,16 @@ const validator = z.object({
   accepted_payment_methods: z.array(
     z.enum(["PIX", "CREDIT", "DEBIT", "CASH"]),
   ).optional(),
+  amenities: z.array(
+    z.enum([
+      "ACCEPTS_CHILDREN",
+      "WIFI",
+      "PARKING",
+      "ACCEPTS_AUTISTIC",
+      "ACCESSIBILITY",
+      "PET_FRIENDLY",
+    ]),
+  ).optional(),
   plan:          z.enum(["FREE", "PRO"]).nullable().optional(),
   status:        z.enum(["PENDING", "APPROVED", "DENIED"]).nullable().optional(),
   approve_date:  z.date().nullable().optional(),

@@ -226,15 +226,15 @@ export class CompanyService {
   async create(company) {
     const {
       legal_name, fantasy_name, cnpj,
-      email, password, phone, photo, website, accepted_payment_methods,
+      email, password, phone, photo, website, accepted_payment_methods, amenities,
       plan, status, approve_date,
     } = company;
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await prisma.company.create({
       data: {
-        legal_name, fantasy_name, cnpj, email, 
-        password: hashedPassword, phone, photo, website, accepted_payment_methods,
+        legal_name, fantasy_name, cnpj, email,
+        password: hashedPassword, phone, photo, website, accepted_payment_methods, amenities,
         plan, status, approve_date,
       },
     });
@@ -672,6 +672,7 @@ export class CompanyService {
         where,
         skip: (page - 1) * Number(limit),
         take: Number(limit),
+        orderBy: { start_time: "asc" },
         include: {
           client: true,
           service: true,
@@ -1212,6 +1213,7 @@ export class CompanyService {
         phone: true,
         website: true,
         accepted_payment_methods: true,
+        amenities: true,
       },
     });
 
@@ -1224,6 +1226,7 @@ export class CompanyService {
       phone: company.phone,
       website: company.website,
       acceptedPaymentMethods: company.accepted_payment_methods,
+      amenities: company.amenities,
     };
   }
 }

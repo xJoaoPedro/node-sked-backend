@@ -79,6 +79,44 @@ function getWeightedTimeSlotFromSlots(slots) {
   return getRandomItem(slots);
 }
 
+function getDailyActivityProfile(date, now) {
+  const weekDay = date.getDay();
+  const isSunday = weekDay === 0;
+  const isSaturday = weekDay === 6;
+  const isToday = getDateKey(date) === getDateKey(now);
+  const isFuture = date > now;
+
+  if (isSunday) {
+    return {
+      shouldOpen: Math.random() < 0.08,
+      minAppointments: 1,
+      maxAppointments: 3,
+    };
+  }
+
+  if (isSaturday) {
+    return {
+      shouldOpen: true,
+      minAppointments: isFuture ? 8 : 10,
+      maxAppointments: isFuture ? 14 : 18,
+    };
+  }
+
+  if (isToday) {
+    return {
+      shouldOpen: true,
+      minAppointments: 6,
+      maxAppointments: 11,
+    };
+  }
+
+  return {
+    shouldOpen: Math.random() < (isFuture ? 0.82 : 0.9),
+    minAppointments: isFuture ? 5 : 7,
+    maxAppointments: isFuture ? 10 : 15,
+  };
+}
+
 const CANCEL_REASONS = [
   "NO_SHOW",
   "SCHEDULE_CONFLICT",
@@ -176,16 +214,18 @@ function generateAppointment({
     let payment_method = null;
 
     if (isFuture) {
-      status = Math.random() < 0.7 ? "CONFIRMED" : "PENDING";
+      status = Math.random() < 0.82 ? "CONFIRMED" : "PENDING";
     } else {
       const rand = Math.random();
 
-      if (rand < 0.6) {
+      if (rand < 0.82) {
         status = "COMPLETED";
         payment_method = getWeightedPaymentMethod();
-      } else if (rand < 0.8) {
+      } else if (rand < 0.9) {
         status = "CANCELED";
         cancel_reason = getRandomItem(CANCEL_REASONS);
+      } else if (rand < 0.96) {
+        status = "NO_SHOW";
       } else {
         status = "CONFIRMED";
       }
@@ -229,6 +269,7 @@ async function main() {
       phone: "51999999999",
       photo: "https://loremflickr.com/400/300/barber",
       accepted_payment_methods: ["PIX", "CREDIT", "DEBIT"],
+      amenities: ["WIFI", "PARKING", "ACCEPTS_CHILDREN", "PET_FRIENDLY"],
       status: "APPROVED",
     },
   });
@@ -429,51 +470,52 @@ async function main() {
   const employeeDayAppointments = new Map();
   const today = now;
 
-  for (let m = 0; m < 6; m++) {
-    const baseDate = new Date();
-    baseDate.setDate(1);
-    baseDate.setMonth(today.getMonth() - m);
+  const seedStartDate = new Date(today);
+  seedStartDate.setMonth(seedStartDate.getMonth() - 5);
+  seedStartDate.setDate(1);
+  seedStartDate.setHours(0, 0, 0, 0);
 
-    const year = baseDate.getFullYear();
-    const month = baseDate.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const seedEndDate = new Date(today);
+  seedEndDate.setDate(seedEndDate.getDate() + 21);
+  seedEndDate.setHours(0, 0, 0, 0);
 
-    let monthAppointments = [];
+  for (
+    const date = new Date(seedStartDate);
+    date <= seedEndDate;
+    date.setDate(date.getDate() + 1)
+  ) {
+    const currentDate = new Date(date);
+    const { shouldOpen, minAppointments, maxAppointments } = getDailyActivityProfile(
+      currentDate,
+      today,
+    );
 
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day);
+    if (!shouldOpen) continue;
 
-      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-      const activityChance = isWeekend ? 0.4 : 0.75;
+    const count = randomBetween(minAppointments, maxAppointments);
+    const isFuture = currentDate > today;
 
-      if (Math.random() > activityChance) continue;
+    for (let i = 0; i < count; i++) {
+      const client = selectClientForAppointment({
+        recurringClients,
+        oneTimeClients,
+        appointmentCounts,
+      });
 
-      const count = isWeekend ? randomBetween(4, 10) : randomBetween(8, 20);
+      const apt = generateAppointment({
+        date: currentDate,
+        services,
+        employees,
+        client,
+        companyId: company.id,
+        isFuture,
+        employeeShiftMap,
+        serviceEmployeeMap,
+        employeeDayAppointments,
+      });
 
-      for (let i = 0; i < count; i++) {
-        const client = selectClientForAppointment({
-          recurringClients,
-          oneTimeClients,
-          appointmentCounts,
-        });
-
-        const apt = generateAppointment({
-          date,
-          services,
-          employees,
-          client,
-          companyId: company.id,
-          isFuture: false,
-          employeeShiftMap,
-          serviceEmployeeMap,
-          employeeDayAppointments,
-        });
-
-        if (apt) monthAppointments.push(apt);
-      }
+      if (apt) appointments.push(apt);
     }
-
-    appointments.push(...monthAppointments);
   }
 
   await prisma.appointment.createMany({

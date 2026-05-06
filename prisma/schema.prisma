@@ -34,6 +34,7 @@ model Company {
   photo                    String?               @db.VarChar(255)
   website                  String?               @db.VarChar(255)
   accepted_payment_methods payment_method_enum[] @default([])
+  amenities                company_amenity_enum[] @default([])
   plan                     plan_enum             @default(FREE)
   status                   company_status_enum   @default(PENDING)
   approve_date             DateTime?             @db.Timestamptz(6)
@@ -337,6 +338,15 @@ enum payment_method_enum {
   CREDIT
   DEBIT
   CASH
+}
+
+enum company_amenity_enum {
+  ACCEPTS_CHILDREN
+  WIFI
+  PARKING
+  ACCEPTS_AUTISTIC
+  ACCESSIBILITY
+  PET_FRIENDLY
 }
 
 enum category_enum {
