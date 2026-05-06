@@ -170,6 +170,9 @@ async function main() {
       cnpj: "12345678000199",
       email: "admin@empresa.com",
       password,
+      phone: "51999999999",
+      photo: "https://loremflickr.com/400/300/barber",
+      accepted_payment_methods: ["PIX", "CREDIT", "DEBIT"],
       status: "APPROVED",
     },
   });

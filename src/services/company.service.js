@@ -8,6 +8,122 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 export class CompanyService {
+  getSaoPauloDateParts(date = new Date()) {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+
+    const parts = Object.fromEntries(
+      formatter
+        .formatToParts(date)
+        .filter(({ type }) => type !== "literal")
+        .map(({ type, value }) => [type, value]),
+    );
+
+    return parts;
+  }
+
+  getSaoPauloDateString(date = new Date()) {
+    const { year, month, day } = this.getSaoPauloDateParts(date);
+
+    return `${year}-${month}-${day}`;
+  }
+
+  getSaoPauloDayRange(date = new Date()) {
+    const dateString = this.getSaoPauloDateString(date);
+
+    return {
+      start: new Date(`${dateString}T00:00:00-03:00`),
+      end: new Date(`${dateString}T23:59:59.999-03:00`),
+    };
+  }
+
+  getMonthStartInSaoPaulo(date = new Date()) {
+    const { year, month } = this.getSaoPauloDateParts(date);
+
+    return new Date(`${year}-${month}-01T00:00:00-03:00`);
+  }
+
+  getSameMomentLastMonth(date = new Date()) {
+    const {
+      year,
+      month,
+      day,
+      hour,
+      minute,
+      second,
+    } = this.getSaoPauloDateParts(date);
+
+    const currentYear = Number(year);
+    const currentMonth = Number(month);
+    const currentDay = Number(day);
+    const lastMonthDate = new Date(currentYear, currentMonth - 2, 1);
+    const lastMonthYear = lastMonthDate.getFullYear();
+    const lastMonthMonth = lastMonthDate.getMonth() + 1;
+    const lastMonthLastDay = new Date(lastMonthYear, lastMonthMonth, 0).getDate();
+    const safeDay = String(Math.min(currentDay, lastMonthLastDay)).padStart(2, "0");
+    const safeMonth = String(lastMonthMonth).padStart(2, "0");
+
+    return new Date(
+      `${lastMonthYear}-${safeMonth}-${safeDay}T${hour}:${minute}:${second}-03:00`,
+    );
+  }
+
+  mapNextAppointments(appointments) {
+    const timeFormatter = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    return appointments
+      .sort((a, b) => a.start_time.getTime() - b.start_time.getTime())
+      .map((appointment) => ({
+        id: String(appointment.id),
+        clientName: appointment.client.name,
+        service: appointment.service.name,
+        date: this.getSaoPauloDateString(appointment.start_time),
+        time: timeFormatter.format(appointment.start_time),
+        dateTime: appointment.start_time.toISOString(),
+        status: appointment.status.toLowerCase(),
+      }));
+  }
+
+  buildWeekStats(startDate, endDate, appointments) {
+    const countsByDate = new Map();
+
+    for (const appointment of appointments) {
+      const date = this.getSaoPauloDateString(appointment.start_time);
+      countsByDate.set(date, (countsByDate.get(date) ?? 0) + 1);
+    }
+
+    const days = [];
+    const cursor = new Date(startDate);
+
+    while (cursor <= endDate) {
+      const date = this.getSaoPauloDateString(cursor);
+      const dow = new Date(`${date}T12:00:00-03:00`).getDay();
+
+      days.push({
+        dow,
+        date,
+        appointments: countsByDate.get(date) ?? 0,
+      });
+
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return days;
+  }
+
   getPeriodStartDate(time = 'month', now = new Date()) {
     const periodsInDays = {
       week: 7,
@@ -110,7 +226,7 @@ export class CompanyService {
   async create(company) {
     const {
       legal_name, fantasy_name, cnpj,
-      email, password, phone, interval_slot,
+      email, password, phone, photo, website, accepted_payment_methods,
       plan, status, approve_date,
     } = company;
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -118,7 +234,7 @@ export class CompanyService {
     await prisma.company.create({
       data: {
         legal_name, fantasy_name, cnpj, email, 
-        password: hashedPassword, phone, interval_slot,
+        password: hashedPassword, phone, photo, website, accepted_payment_methods,
         plan, status, approve_date,
       },
     });
@@ -190,7 +306,7 @@ export class CompanyService {
       services,
       professionals,
       customers,
-      // settings
+      settings
     ] = await Promise.all([
       this.getDashboard(id),
       this.getDailySchedules(id),
@@ -203,7 +319,7 @@ export class CompanyService {
       this.getServices(id),
       this.getProfessionals(id),
       this.getInitialCustomers(id),
-      // settings
+      this.getSettings(id)
     ])
 
     return {
@@ -217,31 +333,23 @@ export class CompanyService {
       products,
       services,
       professionals,
-      customers
-      // settings
+      customers,
+      settings
     }
   }
 
   async getDashboard(id) {
-    const now = new Date()
-
-    const startOfDay = new Date(now)
-    startOfDay.setHours(0, 0, 0, 0)
-    const endOfDay = new Date(startOfDay)
-    endOfDay.setDate(endOfDay.getDate() + 1)
-
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-
-    const startWeek = new Date(now)
-    startWeek.setDate(now.getDate() - 3)
-    startWeek.setHours(0, 0, 0, 0)
-
-    const endWeek = new Date(now)
-    endWeek.setDate(now.getDate() + 3)
-    endWeek.setHours(0, 0, 0, 0)
+    const now = new Date();
+    const { start: startOfDay, end: endOfDay } = this.getSaoPauloDayRange(now);
+    const startOfMonth = this.getMonthStartInSaoPaulo(now);
+    const sameMomentLastMonth = this.getSameMomentLastMonth(now);
+    const startOfLastMonth = this.getMonthStartInSaoPaulo(sameMomentLastMonth);
+    const startWeek = this.getSaoPauloDayRange(
+      new Date(now.getTime() - (3 * 24 * 60 * 60 * 1000)),
+    ).start;
+    const endWeek = this.getSaoPauloDayRange(
+      new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000)),
+    ).end;
 
     const [
       totalToday,
@@ -254,7 +362,7 @@ export class CompanyService {
       totalMonthAppointments,
       lastMonthCanceledCount,
       lastMonthAppointments,
-      weekStats,
+      weekAppointments,
       topServices,
       appointments,
       revenueLast6MonthsRaw
@@ -263,6 +371,7 @@ export class CompanyService {
         where: {
           company_id: id,
           start_time: { gte: startOfDay, lt: endOfDay },
+          status: "CONFIRMED",
         },
       }),
 
@@ -272,15 +381,15 @@ export class CompanyService {
         distinct: ["client_id"],
       }),
 
-      prisma.appointment.findMany({
-        where: {
-          company_id: id,
-          start_time: {
-            gte: startOfMonth,
-            lt: endOfMonth,
-          },
-        },
-        select: { client_id: true },
+	      prisma.appointment.findMany({
+	        where: {
+	          company_id: id,
+	          start_time: {
+	            gte: startOfMonth,
+	            lte: now,
+	          },
+	        },
+	        select: { client_id: true },
         distinct: ["client_id"],
       }),
 
@@ -295,25 +404,25 @@ export class CompanyService {
         distinct: ["client_id"],
       }),
 
-      prisma.$queryRaw`
-        SELECT COALESCE(SUM(s.price), 0) as total
-        FROM appointments a
-        JOIN services s ON s.id = a.service_id
-        WHERE a.company_id = ${id}
-          AND a.start_time >= ${startOfMonth}
-          AND a.start_time < ${endOfMonth}
-          AND a.status = 'COMPLETED'
-      `,
+	      prisma.$queryRaw`
+	        SELECT COALESCE(SUM(s.price), 0) as total
+	        FROM appointments a
+	        JOIN services s ON s.id = a.service_id
+	        WHERE a.company_id = ${id}
+	          AND a.start_time >= ${startOfMonth}
+	          AND a.start_time <= ${now}
+	          AND a.status = 'COMPLETED'
+	      `,
 
-      prisma.$queryRaw`
-        SELECT COALESCE(SUM(s.price), 0) as total
-        FROM appointments a
-        JOIN services s ON s.id = a.service_id
-        WHERE a.company_id = ${id}
-          AND a.start_time >= ${startOfLastMonth}
-          AND a.start_time < ${endOfLastMonth}
-          AND a.status = 'COMPLETED'
-      `,
+	      prisma.$queryRaw`
+	        SELECT COALESCE(SUM(s.price), 0) as total
+	        FROM appointments a
+	        JOIN services s ON s.id = a.service_id
+	        WHERE a.company_id = ${id}
+	          AND a.start_time >= ${startOfLastMonth}
+	          AND a.start_time <= ${sameMomentLastMonth}
+	          AND a.status = 'COMPLETED'
+	      `,
 
       prisma.appointment.count({
         where: {
@@ -329,61 +438,56 @@ export class CompanyService {
       }),
 
       prisma.appointment.count({
-        where: {
-          company_id: id,
-          start_time: { gte: startOfLastMonth, lt: endOfLastMonth },
-          status: "CANCELED",
-        },
-      }),
+	        where: {
+	          company_id: id,
+	          start_time: { gte: startOfLastMonth, lte: sameMomentLastMonth },
+	          status: "CANCELED",
+	        },
+	      }),
 
       prisma.appointment.count({
-        where: {
-          company_id: id,
-          start_time: { gte: startOfLastMonth, lt: endOfLastMonth },
-        },
-      }),
+	        where: {
+	          company_id: id,
+	          start_time: { gte: startOfLastMonth, lte: sameMomentLastMonth },
+	        },
+	      }),
+
+	      prisma.appointment.findMany({
+	        where: {
+	          company_id: id,
+	          start_time: {
+	            gte: startWeek,
+	            lte: endWeek,
+	          },
+            status: "CONFIRMED",
+	        },
+	        select: {
+	          start_time: true,
+	        },
+	      }),
 
       prisma.$queryRaw`
-        WITH days AS (
-          SELECT generate_series(
-            ${startWeek}::date,
-            ${endWeek}::date,
-            interval '1 day'
-          )::date as date
-        )
-        SELECT
-          EXTRACT(DOW FROM d.date) as dow,
-          d.date,
-          COALESCE(COUNT(a.id), 0)::int as appointments
-        FROM days d
-        LEFT JOIN appointments a
-          ON DATE(a.start_time) = d.date
-          AND a.company_id = ${id}
-        GROUP BY d.date
-        ORDER BY d.date
-      `,
+	        SELECT 
+	          s.id,
+	          s.name, 
+	          COUNT(a.id)::int AS total
+	        FROM services s
+	        LEFT JOIN appointments a 
+	          ON a.service_id = s.id
+	          AND a.company_id = ${id}
+	        WHERE s.company_id = ${id}
+	        GROUP BY s.id, s.name
+	        ORDER BY total DESC, s.name ASC
+	      `,
 
-      prisma.$queryRaw`
-        SELECT 
-          s.id,
-          s.name, 
-          COUNT(a.id)::int AS total
-        FROM services s
-        LEFT JOIN appointments a 
-          ON a.service_id = s.id
-          AND a.company_id = ${id}
-        GROUP BY s.id, s.name
-        ORDER BY total DESC
-      `,
-
-      prisma.appointment.findMany({
-        where: {
-          company_id: id,
-          start_time: { gte: now },
-          status: { in: ['PENDING', 'CONFIRMED', 'CANCELED']},
-        },
-        orderBy: { start_time: "asc" },
-        include: {
+	      prisma.appointment.findMany({
+	        where: {
+	          company_id: id,
+	          start_time: { gte: now },
+	          status: "CONFIRMED",
+	        },
+	        orderBy: { start_time: "asc" },
+	        include: {
           service: true,
           client: true,
         },
@@ -441,20 +545,16 @@ export class CompanyService {
       select: { fantasy_name: true }
     });
 
-    const nextAppointments = appointments.map((a) => ({
-      id: String(a.id),
-      clientName: a.client.name,
-      service: a.service.name,
-      time: a.start_time.toISOString(),
-      status: a.status.toLowerCase(),
-    }))
+	    const nextAppointments = this.mapNextAppointments(appointments);
 
-    const revenueLastMonths = revenueLast6MonthsRaw.map((item) => ({
-      month: item.month,
-      total: Number(item.total),
-    }))
+	    const revenueLastMonths = revenueLast6MonthsRaw.map((item) => ({
+	      month: item.month,
+	      total: Number(item.total),
+	    }))
 
-    return {
+    const weekStats = this.buildWeekStats(startWeek, endWeek, weekAppointments);
+
+	    return {
       companyName: fantasy_name,
       totalToday,
       totalClients: totalClients.length,
@@ -1099,6 +1199,31 @@ export class CompanyService {
       total: totalCustomers,
       totalPages: Math.ceil(totalCustomers / limit),
       data: customers,
+    };
+  }
+
+  async getSettings(id) {
+    const company = await prisma.company.findUnique({
+      where: { id },
+      select: {
+        photo: true,
+        fantasy_name: true,
+        email: true,
+        phone: true,
+        website: true,
+        accepted_payment_methods: true,
+      },
+    });
+
+    if (!company) return null;
+
+    return {
+      photo: company.photo,
+      fantasy_name: company.fantasy_name,
+      email: company.email,
+      phone: company.phone,
+      website: company.website,
+      acceptedPaymentMethods: company.accepted_payment_methods,
     };
   }
 }

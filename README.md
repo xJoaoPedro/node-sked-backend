@@ -247,7 +247,9 @@ Os models são feitos utilizando o Prisma ORM, que pode ser configurado de acord
 | email | String | Email da empresa | NOT NULL, UNIQUE |
 | password | String | Senha criptografada | NOT NULL |
 | phone | String | Telefone | NULL |
-| interval_slot |	Int |	Intervalo entre agendamentos (minutos) |	NOT NULL, DEFAULT (15) |
+| photo | String | Foto da empresa | NULL |
+| website | String | Website da empresa | NULL |
+| accepted_payment_methods | enum[] | Formas de pagamento aceitas (PIX, CREDIT, DEBIT, CASH) | NOT NULL, DEFAULT ([]) |
 | plan |	enum |	Plano (FREE, PRO) |	NOT NULL, DEFAULT (FREE) |
 | status |	enum |	Status (PENDING, APPROVED, DENIED) |	NOT NULL, DEFAULT (PENDING) |
 | approve_date |	DateTime |	Data de aprovação |	NULL |
@@ -271,7 +273,10 @@ Os models são feitos utilizando o Prisma ORM, que pode ser configurado de acord
   "cnpj": "12391239123",
   "email": "exemplo@exemplo.com",
   "password": "123456",
-  "phone": "51998557211"
+  "phone": "51998557211",
+  "photo": "https://example.com/company-photo.jpg",
+  "website": "https://empresa.com",
+  "accepted_payment_methods": ["PIX", "CREDIT"]
 }</code></pre>
     </td>
     <td>204 No Content</td>
@@ -314,7 +319,9 @@ Os models são feitos utilizando o Prisma ORM, que pode ser configurado de acord
 			"email": "exemplo@exemplo.com",
 			"password": "$2b$10$CC.DCPVDQ5X76go3fGXce",
 			"phone": "51998557211",
-			"interval_slot": 15,
+			"photo": "https://example.com/company-photo.jpg",
+			"website": "https://empresa.com",
+			"accepted_payment_methods": ["PIX", "CREDIT"],
 			"plan": "FREE",
 			"status": "PENDING",
 			"approve_date": null,
@@ -338,7 +345,9 @@ Os models são feitos utilizando o Prisma ORM, que pode ser configurado de acord
 		"email": "exemplo@exemplo.com",
 		"password": "$2b$10$CC.DCPVDQ5X76go3fGXce",
 		"phone": "51998557211",
-		"interval_slot": 15,
+		"photo": "https://example.com/company-photo.jpg",
+		"website": "https://empresa.com",
+		"accepted_payment_methods": ["PIX", "CREDIT"],
 		"plan": "FREE",
 		"status": "PENDING",
 		"approve_date": null,

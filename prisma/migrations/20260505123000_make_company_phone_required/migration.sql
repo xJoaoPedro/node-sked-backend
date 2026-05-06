@@ -1,0 +1,2 @@
+ALTER TABLE "companies"
+ALTER COLUMN "phone" SET NOT NULL;

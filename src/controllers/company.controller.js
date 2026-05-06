@@ -261,4 +261,27 @@ export default class CompanyController {
       data: customers,
     });
   }
+
+  async getSettings(req, res) {
+    const id = Number(req.params.id);
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const settings = await service.getSettings(id);
+
+    if (!settings) {
+      return res.status(404).json({
+        message: "Empresa não encontrada",
+      });
+    }
+
+    res.status(200).json({
+      message: "Configurações encontradas com sucesso!",
+      data: settings,
+    });
+  }
 }
