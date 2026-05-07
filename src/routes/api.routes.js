@@ -10,6 +10,7 @@ import botInteractionsRouter from "./api/bot_interaction.route.js";
 import signaturesRouter from "./api/signatures.route.js";
 import productsRouter from "./api/products.route.js";
 import professionalsRouter from "./api/professionals.route.js";
+import customersRouter from "./api/customers.route.js";
 
 const apiRouter = Router();
 
@@ -24,5 +25,6 @@ apiRouter.use("/appointments", appointmentsRouter);
 apiRouter.use("/bot-interactions", botInteractionsRouter);
 apiRouter.use("/signatures", signaturesRouter);
 apiRouter.use("/products", productsRouter);
+apiRouter.use("/customers", customersRouter);
 
 export default apiRouter;

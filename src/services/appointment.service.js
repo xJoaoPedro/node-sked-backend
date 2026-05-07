@@ -15,6 +15,15 @@ export class AppointmentConflictError extends Error {
 }
 
 export class AppointmentService {
+  calculateEndTime(start_time, duration_minutes) {
+    const start = new Date(start_time);
+    const end = new Date(start);
+
+    end.setMinutes(end.getMinutes() + Number(duration_minutes));
+
+    return end;
+  }
+
   validateTimeRange(start_time, end_time) {
     if (start_time >= end_time) {
       throw new Error("Horário de término deve ser maior que o horário de início");
@@ -80,17 +89,39 @@ export class AppointmentService {
       employee_id,
       client_id,
       start_time,
-      end_time,
       observations,
       status
     } = appointment;
 
-    this.validateTimeRange(start_time, end_time);
+    const service = await prisma.service.findUnique({
+      where: { id: Number(service_id) },
+      select: {
+        id: true,
+        company_id: true,
+        duration_minutes: true,
+      },
+    });
+
+    if (!service) {
+      throw new Error("Serviço não encontrado");
+    }
+
+    if (service.company_id !== Number(company_id)) {
+      throw new Error("Serviço não pertence à empresa informada");
+    }
+
+    const appointmentStartTime = new Date(start_time);
+    const appointmentEndTime = this.calculateEndTime(
+      appointmentStartTime,
+      service.duration_minutes,
+    );
+
+    this.validateTimeRange(appointmentStartTime, appointmentEndTime);
 
     const hasOverlap = await this.hasEmployeeOverlap({
       employee_id,
-      start_time,
-      end_time,
+      start_time: appointmentStartTime,
+      end_time: appointmentEndTime,
     });
 
     if (hasOverlap) {
@@ -105,14 +136,18 @@ export class AppointmentService {
         service_id: Number(service_id),
         employee_id: Number(employee_id),
         client_id: Number(client_id),
-        start_time,
-        end_time,
+        start_time: appointmentStartTime,
+        end_time: appointmentEndTime,
         observations,
         status
       },
     });
     
-    socket.getIO().emit("new_appointment", appointment);
+    socket.getIO().emit("new_appointment", {
+      ...appointment,
+      start_time: appointmentStartTime,
+      end_time: appointmentEndTime,
+    });
 
     return;
   }

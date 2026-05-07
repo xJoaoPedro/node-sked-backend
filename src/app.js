@@ -28,10 +28,6 @@ const io = socket.init(server);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-app.get('/empresa/:id', (req, res) => {
-  res.sendFile(join(__dirname, 'index.html'));
-});
-
 io.on('connection', (socket) => {
   console.log('Cliente conectado');
 

@@ -672,7 +672,7 @@ export class CompanyService {
         where,
         skip: (page - 1) * Number(limit),
         take: Number(limit),
-        orderBy: { start_time: "asc" },
+        orderBy: { start_time: "desc" },
         include: {
           client: true,
           service: true,
@@ -720,7 +720,7 @@ export class CompanyService {
     const [cancellations, total] = await Promise.all([
       prisma.appointment.findMany({
         where,
-        orderBy: { id: "asc" },
+        orderBy: { start_time: "desc" },
         skip: (page - 1) * Number(limit),
         take: Number(limit),
         include: {
@@ -1000,7 +1000,8 @@ export class CompanyService {
       totalTransactions,
       revenueByMonthRaw,
       revenueByPaymentRaw,
-      recentPayments
+      recentPayments,
+      products,
     ] = await Promise.all([
       // 💰 receita recebida
       prisma.$queryRaw`
@@ -1078,10 +1079,21 @@ export class CompanyService {
         },
         take: 50,
       }),
+
+      prisma.product.findMany({
+        where: { company_id: id },
+        select: {
+          quantity: true,
+          cost_price: true,
+        },
+      }),
     ]);
 
     const revenueReceived = Number(revenueReceivedRaw[0]?.total || 0);
     const revenuePending = Number(revenuePendingRaw[0]?.total || 0);
+    const totalStockCost = products.reduce((acc, product) => {
+      return acc + Number(product.cost_price) * product.quantity;
+    }, 0);
 
     const avgTicket = totalTransactions > 0
       ? revenueReceived / totalTransactions
@@ -1105,6 +1117,7 @@ export class CompanyService {
     return {
       revenueReceived,
       revenuePending,
+      totalStockCost,
       avgTicket,
       totalTransactions,
       revenueByMonth,
