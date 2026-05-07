@@ -122,8 +122,6 @@ export class ProfessionalService {
           });
         }
 
-        console.log(scheduleOpenings)
-
         if (scheduleOpenings) {
           for (const opening of scheduleOpenings) {
             const start = opening.start_time
