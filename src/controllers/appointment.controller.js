@@ -8,6 +8,9 @@ import {
 } from "../validators/appointment.validator.js";
 
 const service = new AppointmentService();
+const getRealtimeOptions = (req) => ({
+  excludedSocketId: req.headers["x-socket-id"],
+});
 
 export default class AppointmentController {
   async findAll(req, res) {
@@ -77,7 +80,7 @@ export default class AppointmentController {
     }
 
     try {
-      await service.create(req.body);
+      await service.create(req.body, getRealtimeOptions(req));
     } catch (error) {
       if (error instanceof AppointmentConflictError) {
         return res.status(409).json({
@@ -110,7 +113,7 @@ export default class AppointmentController {
     let update;
 
     try {
-      update = await service.update(Number(req.params.id), parsed.data);
+      update = await service.update(Number(req.params.id), parsed.data, getRealtimeOptions(req));
     } catch (error) {
       if (error instanceof AppointmentConflictError) {
         return res.status(409).json({
@@ -135,7 +138,7 @@ export default class AppointmentController {
   }
 
   async delete(req, res) {
-    const deleted = await service.delete(Number(req.params.id));
+    const deleted = await service.delete(Number(req.params.id), getRealtimeOptions(req));
 
     if (deleted) return res.status(204).json();
     else

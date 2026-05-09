@@ -7,3 +7,4 @@ const validator = z.object({
 });
 
 export const createCustomerValidator = validator;
+export const updateCustomerValidator = validator.partial();

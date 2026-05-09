@@ -7,4 +7,7 @@ const controller = new CustomerController();
 // POST /
 customersRouter.post("/", controller.create);
 
+// PATCH /:id
+customersRouter.patch("/:id", controller.update);
+
 export default customersRouter;

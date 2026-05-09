@@ -79,4 +79,62 @@ export class CustomerService {
       };
     });
   }
+
+  async update(id, customerData) {
+    const {
+      company_id,
+      name,
+      phone,
+    } = customerData;
+
+    const companyId = company_id ? Number(company_id) : null;
+
+    if (companyId) {
+      const companyCustomer = await prisma.companyCustomer.findUnique({
+        where: {
+          company_id_customer_id: {
+            company_id: companyId,
+            customer_id: Number(id),
+          },
+        },
+      });
+
+      if (!companyCustomer) {
+        throw new CustomerNotFoundError("Cliente nao encontrado para esta empresa");
+      }
+    }
+
+    const existingCustomer = await prisma.customer.findUnique({
+      where: { id: Number(id) },
+    });
+
+    if (!existingCustomer) {
+      throw new CustomerNotFoundError("Cliente nao encontrado");
+    }
+
+    if (phone && phone !== existingCustomer.phone) {
+      const customerWithPhone = await prisma.customer.findUnique({
+        where: { phone },
+      });
+
+      if (customerWithPhone && customerWithPhone.id !== Number(id)) {
+        throw new CustomerConflictError("Ja existe um cliente cadastrado com este telefone");
+      }
+    }
+
+    const updatedCustomer = await prisma.customer.update({
+      where: { id: Number(id) },
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        ...(phone !== undefined ? { phone } : {}),
+      },
+    });
+
+    return {
+      id: updatedCustomer.id,
+      company_id: companyId,
+      name: updatedCustomer.name,
+      phone: updatedCustomer.phone,
+    };
+  }
 }

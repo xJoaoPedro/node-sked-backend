@@ -5,6 +5,9 @@ import {
 } from "../validators/product.validator.js";
 
 const service = new ProductService();
+const getRealtimeOptions = (req) => ({
+  excludedSocketId: req.headers["x-socket-id"],
+});
 
 export default class ProductController {
   async findAll(req, res) {
@@ -49,7 +52,7 @@ export default class ProductController {
       });
     }
 
-    const created = await service.create(req.body);
+    const created = await service.create(req.body, getRealtimeOptions(req));
 
     res.status(200).json({
       message: "Produto criado com sucesso!",
@@ -67,7 +70,7 @@ export default class ProductController {
       });
     }
 
-    const update = await service.update(Number(req.params.id), parsed.data);
+    const update = await service.update(Number(req.params.id), parsed.data, getRealtimeOptions(req));
 
     if (update) return res.status(204).json();
     else
@@ -77,7 +80,7 @@ export default class ProductController {
   }
 
   async delete(req, res) {
-    const deleted = await service.delete(Number(req.params.id));
+    const deleted = await service.delete(Number(req.params.id), getRealtimeOptions(req));
 
     if (deleted) return res.status(204).json();
     else
