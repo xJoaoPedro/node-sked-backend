@@ -11,20 +11,25 @@ import signaturesRouter from "./api/signatures.route.js";
 import productsRouter from "./api/products.route.js";
 import professionalsRouter from "./api/professionals.route.js";
 import customersRouter from "./api/customers.route.js";
+import {
+  authorizeCompanyPayloadAccess,
+  authorizeCompanyRouteAccess,
+} from "../utils/authenticators/company-access.js";
 
 const apiRouter = Router();
 
+apiRouter.use("/companies/:id", authorizeCompanyRouteAccess);
+apiRouter.use("/professionals", authorizeCompanyPayloadAccess, professionalsRouter);
+apiRouter.use("/addresses", authorizeCompanyPayloadAccess, addressesRouter);
+apiRouter.use("/schedule-openings", authorizeCompanyPayloadAccess, scheduleOpeningsRouter);
+apiRouter.use("/schedule-blocks", authorizeCompanyPayloadAccess, scheduleBlocksRouter);
+apiRouter.use("/services", authorizeCompanyPayloadAccess, servicesRouter);
+apiRouter.use("/appointments", authorizeCompanyPayloadAccess, appointmentsRouter);
+apiRouter.use("/bot-interactions", authorizeCompanyPayloadAccess, botInteractionsRouter);
+apiRouter.use("/signatures", authorizeCompanyPayloadAccess, signaturesRouter);
+apiRouter.use("/products", authorizeCompanyPayloadAccess, productsRouter);
+apiRouter.use("/customers", authorizeCompanyPayloadAccess, customersRouter);
 apiRouter.use("/users", usersRouter);
 apiRouter.use("/companies", companiesRouter);
-apiRouter.use("/professionals", professionalsRouter);
-apiRouter.use("/addresses", addressesRouter);
-apiRouter.use("/schedule-openings", scheduleOpeningsRouter);
-apiRouter.use("/schedule-blocks", scheduleBlocksRouter);
-apiRouter.use("/services", servicesRouter);
-apiRouter.use("/appointments", appointmentsRouter);
-apiRouter.use("/bot-interactions", botInteractionsRouter);
-apiRouter.use("/signatures", signaturesRouter);
-apiRouter.use("/products", productsRouter);
-apiRouter.use("/customers", customersRouter);
 
 export default apiRouter;

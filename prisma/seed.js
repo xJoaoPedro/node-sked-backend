@@ -257,6 +257,23 @@ function generateAppointment({
 // ---------------------
 async function main() {
   const password = await bcrypt.hash("123456", 10);
+  const employeeSeedUsers = [
+    {
+      name: "Funcionario 1",
+      email: "func1@empresa.com",
+      phone: "51999999991",
+    },
+    {
+      name: "Funcionario 2",
+      email: "func2@empresa.com",
+      phone: "51999999992",
+    },
+    {
+      name: "Funcionario 3",
+      email: "func3@empresa.com",
+      phone: "51999999993",
+    },
+  ];
 
   // COMPANY
   const company = await prisma.company.create({
@@ -270,6 +287,7 @@ async function main() {
       photo: "https://loremflickr.com/400/300/barber",
       accepted_payment_methods: ["PIX", "CREDIT", "DEBIT"],
       amenities: ["WIFI", "PARKING", "ACCEPTS_CHILDREN", "PET_FRIENDLY"],
+      low_stock_threshold: 2,
       status: "APPROVED",
     },
   });
@@ -287,13 +305,13 @@ async function main() {
   // EMPLOYEES
   const employees = [];
 
-  for (let i = 0; i < 3; i++) {
+  for (const employeeSeedUser of employeeSeedUsers) {
     const user = await prisma.user.create({
       data: {
-        name: `Funcionario ${i + 1}`,
-        email: `func${i + 1}@empresa.com`,
+        name: employeeSeedUser.name,
+        email: employeeSeedUser.email,
         password,
-        phone: "51999999999",
+        phone: employeeSeedUser.phone,
       },
     });
 

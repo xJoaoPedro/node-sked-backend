@@ -35,6 +35,7 @@ model Company {
   website                  String?               @db.VarChar(255)
   accepted_payment_methods payment_method_enum[] @default([])
   amenities                company_amenity_enum[] @default([])
+  low_stock_threshold      Int                   @default(2)
   plan                     plan_enum             @default(FREE)
   status                   company_status_enum   @default(PENDING)
   approve_date             DateTime?             @db.Timestamptz(6)

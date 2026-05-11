@@ -2,10 +2,12 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import pkg from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import socketServer from "../socket.js";
 
 const { PrismaClient } = pkg 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
+const socket = socketServer;
 
 export class CompanyService {
   getSaoPauloDateParts(date = new Date()) {
@@ -227,6 +229,7 @@ export class CompanyService {
     const {
       legal_name, fantasy_name, cnpj,
       email, password, phone, photo, website, accepted_payment_methods, amenities,
+      low_stock_threshold,
       plan, status, approve_date,
     } = company;
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -235,6 +238,7 @@ export class CompanyService {
       data: {
         legal_name, fantasy_name, cnpj, email,
         password: hashedPassword, phone, photo, website, accepted_payment_methods, amenities,
+        low_stock_threshold,
         plan, status, approve_date,
       },
     });
@@ -242,12 +246,44 @@ export class CompanyService {
     return;
   }
 
-  async update(id, data) {
+  emitCompanyUpdatedEvent(company, options = {}) {
+    const payload = {
+      id: company.id,
+      company_id: company.id,
+      fantasy_name: company.fantasy_name,
+      email: company.email,
+      phone: company.phone,
+      photo: company.photo,
+      website: company.website,
+      low_stock_threshold: company.low_stock_threshold,
+      created_at: company.updated_at ?? new Date().toISOString(),
+      title: "Configurações atualizadas",
+      message: "Os dados da empresa foram atualizados em outra sessão.",
+      type: "success",
+    };
+
+    socket.emitNotificationToCompany(company.id, "company:updated", payload, options);
+    socket.emitToCompany(
+      company.id,
+      "dashboard:updated",
+      {
+        company_id: company.id,
+        source: "company",
+        event: "company:updated",
+        created_at: new Date().toISOString(),
+      },
+      options,
+    );
+  }
+
+  async update(id, data, options = {}) {
     try {
-      await prisma.company.update({
+      const updatedCompany = await prisma.company.update({
         where: { id },
         data,
       });
+
+      this.emitCompanyUpdatedEvent(updatedCompany, options);
 
       return true;
     } catch (error) {
@@ -1123,12 +1159,20 @@ export class CompanyService {
   }
 
   async getProducts(id) {
-    const products = await prisma.product.findMany({
-      where: {
-        company_id: id,
-      },
-      orderBy: { id: 'asc' }
-    });
+    const [company, products] = await Promise.all([
+      prisma.company.findUnique({
+        where: { id },
+        select: { low_stock_threshold: true },
+      }),
+      prisma.product.findMany({
+        where: {
+          company_id: id,
+        },
+        orderBy: { id: 'asc' }
+      }),
+    ]);
+
+    const lowStockThreshold = company?.low_stock_threshold ?? 2;
 
     const totalProducts = products.reduce((acc, product) => {
       return acc + Number(product.quantity);
@@ -1138,7 +1182,9 @@ export class CompanyService {
       return acc + Number(product.cost_price) * product.quantity;
     }, 0);
 
-    const lowStock = products.filter(p => p.quantity > 0 && p.quantity <= 2).length;
+    const lowStock = products.filter(
+      (product) => product.quantity > 0 && product.quantity <= lowStockThreshold,
+    ).length;
 
     const outOfStock = products.filter(p => p.quantity === 0).length;
 
@@ -1148,6 +1194,7 @@ export class CompanyService {
       totalCost,
       lowStock,
       outOfStock,
+      lowStockThreshold,
     };
   }
 
@@ -1214,6 +1261,7 @@ export class CompanyService {
         website: true,
         accepted_payment_methods: true,
         amenities: true,
+        low_stock_threshold: true,
       },
     });
 
@@ -1227,6 +1275,7 @@ export class CompanyService {
       website: company.website,
       acceptedPaymentMethods: company.accepted_payment_methods,
       amenities: company.amenities,
+      lowStockThreshold: company.low_stock_threshold,
     };
   }
 }

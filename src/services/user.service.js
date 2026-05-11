@@ -10,16 +10,48 @@ const prisma = new PrismaClient({ adapter });
 export class UserService {
   async findAll() {
 	  try {
-		  return await prisma.user.findMany();
+		  return await prisma.user.findMany({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          status: true,
+          last_login: true,
+          created_at: true,
+          updated_at: true,
+        },
+      });
 	  } catch (err) {
 		  console.log(err);
 	  }
-    return await prisma.user.findMany();
+    return await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        status: true,
+        last_login: true,
+        created_at: true,
+        updated_at: true,
+      },
+    });
   }
 
   async findOne(id) {
     const user = await prisma.user.findUnique({
       where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        status: true,
+        last_login: true,
+        created_at: true,
+        updated_at: true,
+      },
     });
 
     return user ?? null;
@@ -43,9 +75,17 @@ export class UserService {
 
   async update(id, data) {
     try {
+      const nextData = { ...data };
+
+      if (typeof nextData.password === "string" && nextData.password.length > 0) {
+        nextData.password = await bcrypt.hash(nextData.password, 10);
+      } else {
+        delete nextData.password;
+      }
+
       await prisma.user.update({
         where: { id },
-        data,
+        data: nextData,
       });
 
       return true;
@@ -71,6 +111,22 @@ export class UserService {
     
     const user = await prisma.user.findUnique({
       where: { email: email },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            company_id: true,
+            role: true,
+            status: true,
+            company: {
+              select: {
+                id: true,
+                status: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!user) return res.status(401).json({ error: "Credenciais inválidas" });
@@ -79,16 +135,40 @@ export class UserService {
 
     if (!valid) return res.status(401).json({ error: "Credenciais inválidas" });
 
+    if (!user.employee?.company_id || !user.employee?.company?.id) {
+      return res.status(403).json({ error: "Usuário não pertence a nenhuma empresa" });
+    }
+
+    if (user.employee.status !== "ACTIVE") {
+      return res.status(403).json({ error: "Funcionário desativado" });
+    }
+
+    if (user.employee.company.status !== "APPROVED") {
+      return res.status(403).json({ error: "Empresa não está disponível para acesso" });
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        last_login: new Date(),
+      },
+    });
+
     return {
       token: jwt.sign(
         {
           user_id: user.id,
-          company_id: user.company_id,
+          employee_id: user.employee.id,
+          company_id: user.employee.company_id,
+          role: user.employee.role,
+          auth_type: "user",
         },
         process.env.JWT_SECRET,
         { expiresIn: "1d" },
       ),
-      companyId: user.company_id
+      companyId: user.employee.company_id,
+      employeeId: user.employee.id,
+      role: user.employee.role,
     } 
   }
 }

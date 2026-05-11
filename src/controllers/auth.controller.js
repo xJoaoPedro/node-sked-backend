@@ -32,7 +32,7 @@ function parse(body, res, type) {
 
 export default class AuthController {
   async userRegister(req, res) {
-    parse(req.body, res, "user");
+    if (!parse(req.body, res, "user")) return;
 
     await userService.create(req.body);
 
@@ -40,7 +40,7 @@ export default class AuthController {
   }
 
   async companyRegister(req, res) {
-    parse(req.body, res, "company");
+    if (!parse(req.body, res, "company")) return;
 
     await companyService.create(req.body);
 
@@ -48,17 +48,19 @@ export default class AuthController {
   }
 
   async userLogin(req, res) {
-    parse(req.body, res, "user");
+    if (!parse(req.body, res, "user")) return;
 
     const data = await userService.login(req.body, res);
+    if (!data) return;
 
     return res.json(data);
   }
 
   async companyLogin(req, res) {
-    parse(req.body, res, "company");
+    if (!parse(req.body, res, "company")) return;
 
     const data = await companyService.login(req.body, res);
+    if (!data) return;
 
     return res.json(data);
   }

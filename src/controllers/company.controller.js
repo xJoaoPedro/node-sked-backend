@@ -5,6 +5,9 @@ import {
 } from "../validators/company.validator.js";
 
 const service = new CompanyService();
+const getRealtimeOptions = (req) => ({
+  excludedSocketId: req.headers["x-socket-id"],
+});
 
 export default class CompanyController {
   async findAll(req, res) {
@@ -49,7 +52,11 @@ export default class CompanyController {
       });
     }
 
-    const update = await service.update(Number(req.params.id), parsed.data);
+    const update = await service.update(
+      Number(req.params.id),
+      parsed.data,
+      getRealtimeOptions(req),
+    );
 
     if (update) return res.status(204).json();
     else
