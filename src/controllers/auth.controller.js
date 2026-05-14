@@ -1,3 +1,4 @@
+import jwt from "jsonwebtoken";
 import { createCompanyValidator } from "../validators/company.validator.js";
 import { createUserValidator } from "../validators/user.validator.js";
 import { CompanyService } from "../services/company.service.js";
@@ -63,5 +64,24 @@ export default class AuthController {
     if (!data) return;
 
     return res.json(data);
+  }
+
+  async refreshSession(req, res) {
+    const currentUser = req.user || {};
+    const payload = { ...currentUser };
+
+    delete payload.iat;
+    delete payload.exp;
+
+    const isUserSession = payload.auth_type === "user" || Boolean(payload.user_id);
+    const expiresIn = isUserSession ? "1d" : "1h";
+
+    const token = jwt.sign(
+      payload,
+      process.env.JWT_SECRET,
+      { expiresIn },
+    );
+
+    return res.status(200).json({ token });
   }
 }

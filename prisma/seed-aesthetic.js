@@ -7,9 +7,6 @@ const { PrismaClient } = pkg;
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-// ---------------------
-// Utils
-// ---------------------
 function randomBetween(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -18,18 +15,38 @@ function getRandomItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function getRandomCommission(min = 30, max = 50) {
-  return Number((Math.random() * (max - min) + min).toFixed(2));
+function randomDateBetween(start, end) {
+  const startTime = start.getTime();
+  const endTime = end.getTime();
+
+  return new Date(startTime + Math.random() * (endTime - startTime));
 }
 
-// ---------------------
-// Products helpers
-// ---------------------
 const PRODUCT_NAMES = {
-  HAIR: ["Shampoo Profissional", "Condicionador", "Pomada Modeladora"],
-  BEARD: ["Óleo de Barba", "Balm", "Shampoo Barba"],
-  AESTHETIC: ["Creme Facial", "Sérum", "Hidratante"],
-  BEAUTY: ["Base", "Primer", "Fixador"],
+  AESTHETIC: [
+    "Serum Vitamina C",
+    "Mascara Calmante",
+    "Protetor Solar Facial FPS 60",
+    "Gel de Limpeza Facial",
+  ],
+  BEAUTY: [
+    "Henna para Sobrancelhas",
+    "Fixador de Maquiagem",
+    "Agua Micelar",
+    "Primer Iluminador",
+  ],
+  HEALTH: [
+    "Creme Pos-Procedimento",
+    "Gel Condutor",
+    "Argila Branca",
+    "Locao Antisseptica",
+  ],
+  MASSAGE: [
+    "Oleo Corporal Relaxante",
+    "Creme de Massagem Redutor",
+    "Fluido Drenante",
+    "Esfoliante Corporal",
+  ],
   OTHER: ["Produto Genérico"],
 };
 
@@ -37,25 +54,11 @@ function getRandomProduct(category) {
   return getRandomItem(PRODUCT_NAMES[category] || PRODUCT_NAMES.OTHER);
 }
 
-// ---------------------
-// Appointment utils
-// ---------------------
-const TIME_SLOTS = Array.from({ length: (22 - 6) * 2 }, (_, i) => {
-  const hour = 6 + Math.floor(i / 2);
+const TIME_SLOTS = Array.from({ length: (21 - 8) * 2 }, (_, i) => {
+  const hour = 8 + Math.floor(i / 2);
   const minute = i % 2 === 0 ? 0 : 30;
   return { hour, minute };
 });
-
-function getWeightedTimeSlot() {
-  const peakMorning = TIME_SLOTS.filter(s => s.hour >= 9 && s.hour <= 12);
-  const peakEvening = TIME_SLOTS.filter(s => s.hour >= 17 && s.hour <= 20);
-
-  const rand = Math.random();
-
-  if (rand < 0.4) return getRandomItem(peakMorning);
-  if (rand < 0.7) return getRandomItem(peakEvening);
-  return getRandomItem(TIME_SLOTS);
-}
 
 function getDateKey(date) {
   const year = date.getFullYear();
@@ -70,12 +73,12 @@ function overlaps(startA, endA, startB, endB) {
 }
 
 function getWeightedTimeSlotFromSlots(slots) {
-  const morningSlots = slots.filter((slot) => slot.hour >= 9 && slot.hour <= 12);
-  const eveningSlots = slots.filter((slot) => slot.hour >= 17 && slot.hour <= 20);
+  const lateMorningSlots = slots.filter((slot) => slot.hour >= 10 && slot.hour <= 12);
+  const afternoonSlots = slots.filter((slot) => slot.hour >= 14 && slot.hour <= 18);
   const rand = Math.random();
 
-  if (rand < 0.4 && morningSlots.length > 0) return getRandomItem(morningSlots);
-  if (rand < 0.7 && eveningSlots.length > 0) return getRandomItem(eveningSlots);
+  if (rand < 0.35 && lateMorningSlots.length > 0) return getRandomItem(lateMorningSlots);
+  if (rand < 0.8 && afternoonSlots.length > 0) return getRandomItem(afternoonSlots);
   return getRandomItem(slots);
 }
 
@@ -88,32 +91,32 @@ function getDailyActivityProfile(date, now) {
 
   if (isSunday) {
     return {
-      shouldOpen: Math.random() < 0.08,
-      minAppointments: 1,
-      maxAppointments: 3,
+      shouldOpen: false,
+      minAppointments: 0,
+      maxAppointments: 0,
     };
   }
 
   if (isSaturday) {
     return {
       shouldOpen: true,
-      minAppointments: isFuture ? 8 : 10,
-      maxAppointments: isFuture ? 14 : 18,
+      minAppointments: isFuture ? 6 : 8,
+      maxAppointments: isFuture ? 10 : 13,
     };
   }
 
   if (isToday) {
     return {
       shouldOpen: true,
-      minAppointments: 6,
-      maxAppointments: 11,
+      minAppointments: 5,
+      maxAppointments: 9,
     };
   }
 
   return {
-    shouldOpen: Math.random() < (isFuture ? 0.82 : 0.9),
-    minAppointments: isFuture ? 5 : 7,
-    maxAppointments: isFuture ? 10 : 15,
+    shouldOpen: Math.random() < (isFuture ? 0.86 : 0.93),
+    minAppointments: isFuture ? 4 : 6,
+    maxAppointments: isFuture ? 9 : 12,
   };
 }
 
@@ -126,22 +129,31 @@ const CANCEL_REASONS = [
   "OTHER",
 ];
 
+const APPOINTMENT_OBSERVATIONS = [
+  "Primeira avaliacao",
+  "Retorno de procedimento",
+  "Cliente prefere atendimento em sala reservada",
+  "Pele sensivel, usar produtos suaves",
+  "Solicitou orientacoes de home care",
+  "Sessao de manutencao",
+];
+
 function getWeightedPaymentMethod() {
   const rand = Math.random();
 
-  if (rand < 0.5) return "PIX";
-  if (rand < 0.75) return "DEBIT";
-  if (rand < 0.9) return "CREDIT";
+  if (rand < 0.45) return "PIX";
+  if (rand < 0.75) return "CREDIT";
+  if (rand < 0.92) return "DEBIT";
   return "CASH";
 }
 
 function selectClientForAppointment({ recurringClients, oneTimeClients, appointmentCounts }) {
   const availableOneTimeClients = oneTimeClients.filter(
-    (client) => (appointmentCounts.get(client.id) || 0) === 0
+    (client) => (appointmentCounts.get(client.id) || 0) === 0,
   );
 
   const shouldUseOneTimeClient =
-    availableOneTimeClients.length > 0 && Math.random() < 0.35;
+    availableOneTimeClients.length > 0 && Math.random() < 0.28;
 
   const client = shouldUseOneTimeClient
     ? getRandomItem(availableOneTimeClients)
@@ -152,16 +164,6 @@ function selectClientForAppointment({ recurringClients, oneTimeClients, appointm
   return client;
 }
 
-function randomDateBetween(start, end) {
-  const startTime = start.getTime();
-  const endTime = end.getTime();
-
-  return new Date(startTime + Math.random() * (endTime - startTime));
-}
-
-// ---------------------
-// Appointment generator
-// ---------------------
 function generateAppointment({
   date,
   services,
@@ -195,7 +197,6 @@ function generateAppointment({
 
     const start = new Date(date);
     const slot = getWeightedTimeSlotFromSlots(availableSlots);
-
     start.setHours(slot.hour, slot.minute, 0, 0);
 
     const end = new Date(start);
@@ -214,22 +215,25 @@ function generateAppointment({
     let payment_method = null;
 
     if (isFuture) {
-      status = Math.random() < 0.82 ? "CONFIRMED" : "PENDING";
+      status = Math.random() < 0.78 ? "CONFIRMED" : "PENDING";
     } else {
       const rand = Math.random();
 
-      if (rand < 0.82) {
+      if (rand < 0.8) {
         status = "COMPLETED";
         payment_method = getWeightedPaymentMethod();
-      } else if (rand < 0.9) {
+      } else if (rand < 0.89) {
         status = "CANCELED";
         cancel_reason = getRandomItem(CANCEL_REASONS);
-      } else if (rand < 0.96) {
+      } else if (rand < 0.95) {
         status = "NO_SHOW";
       } else {
         status = "CONFIRMED";
       }
     }
+
+    const observations =
+      Math.random() < 0.55 ? getRandomItem(APPOINTMENT_OBSERVATIONS) : null;
 
     const appointment = {
       company_id: companyId,
@@ -238,6 +242,7 @@ function generateAppointment({
       client_id: client.id,
       start_time: start,
       end_time: end,
+      observations,
       status,
       cancel_reason,
       payment_method,
@@ -252,57 +257,52 @@ function generateAppointment({
   return null;
 }
 
-// ---------------------
-// MAIN
-// ---------------------
 async function main() {
   const password = await bcrypt.hash("123456", 10);
   const employeeSeedUsers = [
     {
-      name: "Funcionario 1",
-      email: "func1@empresa.com",
-      phone: "51999999991",
+      name: "Juliana Martins",
+      email: "juliana@luminaestetica.com",
+      phone: "51999999111",
     },
     {
-      name: "Funcionario 2",
-      email: "func2@empresa.com",
-      phone: "51999999992",
+      name: "Carla Azevedo",
+      email: "carla@luminaestetica.com",
+      phone: "51999999112",
     },
     {
-      name: "Funcionario 3",
-      email: "func3@empresa.com",
-      phone: "51999999993",
+      name: "Renata Silveira",
+      email: "renata@luminaestetica.com",
+      phone: "51999999113",
     },
   ];
 
-  // COMPANY
   const company = await prisma.company.create({
     data: {
-      legal_name: "Empresa LTDA",
-      fantasy_name: "Empresa Teste",
-      cnpj: "12345678000199",
-      email: "admin@empresa.com",
+      legal_name: "Lumina Estetica Avancada LTDA",
+      fantasy_name: "Lumina Clinica Estetica",
+      cnpj: "48765432000188",
+      email: "contato@luminaestetica.com",
       password,
       phone: "51998557211",
-      photo: "https://loremflickr.com/400/300/barber",
-      accepted_payment_methods: ["PIX", "CREDIT", "DEBIT"],
-      amenities: ["WIFI", "PARKING", "ACCEPTS_CHILDREN", "PET_FRIENDLY"],
-      low_stock_threshold: 2,
+      photo: "https://loremflickr.com/400/300/aesthetic-clinic",
+      website: "https://luminaestetica.com",
+      accepted_payment_methods: ["PIX", "CREDIT", "DEBIT", "CASH"],
+      amenities: ["WIFI", "PARKING", "ACCESSIBILITY", "ACCEPTS_AUTISTIC"],
+      low_stock_threshold: 4,
       status: "APPROVED",
     },
   });
 
-  // ADMIN
-  const adminUser = await prisma.user.create({
+  await prisma.user.create({
     data: {
-      name: "Admin",
-      email: "admin@empresa.com",
+      name: "Admin Lumina",
+      email: "contato@luminaestetica.com",
       password,
       phone: "51998557211",
     },
   });
 
-  // EMPLOYEES
   const employees = [];
 
   for (const employeeSeedUser of employeeSeedUsers) {
@@ -329,23 +329,19 @@ async function main() {
     employees.push(employee);
   }
 
-  // 🔥 ADIÇÃO: ScheduleOpening
-  const shifts = ["MORNING", "AFTERNOON", "NIGHT"];
+  const SHIFTS = [
+    { start: 9, end: 17 },
+    { start: 10, end: 18 },
+    { start: 11, end: 20 },
+  ];
   const employeeShiftMap = new Map();
-
-  const SHIFTS = {
-    MORNING: { start: 6, end: 12 },
-    AFTERNOON: { start: 12, end: 18 },
-    NIGHT: { start: 18, end: 22 },
-  };
 
   for (let i = 0; i < employees.length; i++) {
     const employee = employees[i];
-    const shiftKey = shifts[i % shifts.length];
-    const shift = SHIFTS[shiftKey];
+    const shift = SHIFTS[i % SHIFTS.length];
     employeeShiftMap.set(employee.id, shift);
 
-    for (let weekDay = 1; weekDay <= 5; weekDay++) {
+    for (let weekDay = 1; weekDay <= 6; weekDay++) {
       await prisma.scheduleOpening.create({
         data: {
           company_id: company.id,
@@ -358,7 +354,6 @@ async function main() {
     }
   }
 
-  // CLIENTS
   const now = new Date();
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(now.getDate() - 30);
@@ -366,14 +361,47 @@ async function main() {
   const sixMonthsAgo = new Date(now);
   sixMonthsAgo.setMonth(now.getMonth() - 6);
 
-  const customerSeedData = Array.from({ length: 80 }).map((_, i) => {
-    const createdAt = i < 22
+  const customerFirstNames = [
+    "Ana",
+    "Beatriz",
+    "Camila",
+    "Daniela",
+    "Eduarda",
+    "Fernanda",
+    "Gabriela",
+    "Helena",
+    "Isabela",
+    "Juliana",
+    "Larissa",
+    "Mariana",
+    "Natasha",
+    "Patricia",
+    "Rafaela",
+    "Sabrina",
+    "Tatiane",
+    "Vanessa",
+  ];
+  const customerLastNames = [
+    "Silva",
+    "Souza",
+    "Oliveira",
+    "Costa",
+    "Pereira",
+    "Rodrigues",
+    "Almeida",
+    "Fernandes",
+    "Gomes",
+    "Martins",
+  ];
+
+  const customerSeedData = Array.from({ length: 72 }).map((_, i) => {
+    const createdAt = i < 20
       ? randomDateBetween(thirtyDaysAgo, now)
       : randomDateBetween(sixMonthsAgo, thirtyDaysAgo);
 
     return {
-      name: `Cliente ${i + 1}`,
-      phone: `51988${String(i + 1).padStart(6, "0")}`,
+      name: `${getRandomItem(customerFirstNames)} ${getRandomItem(customerLastNames)}`,
+      phone: `51987${String(i + 1).padStart(6, "0")}`,
       createdAt,
     };
   });
@@ -387,8 +415,8 @@ async function main() {
           created_at: customer.createdAt,
           updated_at: customer.createdAt,
         },
-      })
-    )
+      }),
+    ),
   );
 
   await prisma.companyCustomer.createMany({
@@ -400,61 +428,92 @@ async function main() {
     })),
   });
 
-  const recurringClients = clients.slice(0, 24);
-  const oneTimeClients = clients.slice(24);
+  const recurringClients = clients.slice(0, 26);
+  const oneTimeClients = clients.slice(26);
   const appointmentCounts = new Map();
 
-  // SERVICES
   const services = await Promise.all([
     prisma.service.create({
       data: {
         company_id: company.id,
-        name: "Corte",
-        category: "HAIR",
-        duration_minutes: 30,
-        price: 50,
-        commission: 40,
+        name: "Limpeza de Pele Premium",
+        category: "AESTHETIC",
+        description: "Higienizacao profunda com extracao e mascara calmante",
+        duration_minutes: 90,
+        price: 180,
+        commission: 35,
       },
     }),
     prisma.service.create({
       data: {
         company_id: company.id,
-        name: "Barba",
-        category: "BEARD",
-        duration_minutes: 30,
-        price: 30,
+        name: "Drenagem Linfatica",
+        category: "MASSAGE",
+        description: "Sessao corporal para reducao de liquidos e bem-estar",
+        duration_minutes: 60,
+        price: 140,
+        commission: 32,
+      },
+    }),
+    prisma.service.create({
+      data: {
+        company_id: company.id,
+        name: "Peeling Quimico",
+        category: "AESTHETIC",
+        description: "Procedimento para renovacao e uniformizacao da pele",
+        duration_minutes: 60,
+        price: 220,
         commission: 30,
       },
     }),
     prisma.service.create({
       data: {
         company_id: company.id,
-        name: "Combo (Corte + Barba)",
-        category: "HAIR",
-        duration_minutes: 60,
-        price: 70,
-        commission: 45,
+        name: "Design de Sobrancelhas",
+        category: "BEAUTY",
+        description: "Modelagem personalizada com acabamento",
+        duration_minutes: 45,
+        price: 55,
+        commission: 40,
+      },
+    }),
+    prisma.service.create({
+      data: {
+        company_id: company.id,
+        name: "Depilacao a Laser - Axilas",
+        category: "AESTHETIC",
+        description: "Sessao avulsa de depilacao a laser",
+        duration_minutes: 30,
+        price: 120,
+        commission: 28,
       },
     }),
   ]);
 
-  // RELAÇÃO N:N
+  const serviceAssignments = [
+    [0, 1, 3],
+    [0, 2, 4],
+    [1, 2, 3, 4],
+  ];
   const serviceEmployeeMap = new Map();
 
-  for (const employee of employees) {
-    for (const service of services) {
-      if (Math.random() > 0.3) {
-        await prisma.employeeService.create({
-          data: {
-            employee_id: employee.id,
-            service_id: service.id,
-          },
-        });
+  for (let employeeIndex = 0; employeeIndex < employees.length; employeeIndex++) {
+    const employee = employees[employeeIndex];
+    const assignedServiceIndexes = serviceAssignments[employeeIndex] ?? [];
 
-        const employeeList = serviceEmployeeMap.get(service.id) ?? [];
-        employeeList.push(employee);
-        serviceEmployeeMap.set(service.id, employeeList);
-      }
+    for (const serviceIndex of assignedServiceIndexes) {
+      const service = services[serviceIndex];
+
+      await prisma.employeeService.create({
+        data: {
+          employee_id: employee.id,
+          service_id: service.id,
+        },
+      });
+
+      const employeeList = serviceEmployeeMap.get(service.id) ?? [];
+      employeeList.push(employee);
+      serviceEmployeeMap.set(service.id, employeeList);
     }
   }
 
@@ -464,26 +523,24 @@ async function main() {
     }
   }
 
-  // PRODUCTS
-  const productCategories = ["HAIR", "BEARD", "AESTHETIC", "BEAUTY"];
+  const productCategories = ["AESTHETIC", "BEAUTY", "HEALTH", "MASSAGE"];
 
   await Promise.all(
     productCategories.flatMap((category) =>
-      Array.from({ length: 2 }).map(() =>
+      Array.from({ length: 3 }).map(() =>
         prisma.product.create({
           data: {
             company_id: company.id,
             name: getRandomProduct(category),
             category,
-            quantity: randomBetween(5, 50),
-            cost_price: Number((Math.random() * 20 + 5).toFixed(2)),
+            quantity: randomBetween(3, 20),
+            cost_price: Number((Math.random() * 70 + 15).toFixed(2)),
           },
-        })
-      )
-    )
+        }),
+      ),
+    ),
   );
 
-  // APPOINTMENTS
   const appointments = [];
   const employeeDayAppointments = new Map();
   const today = now;
@@ -520,7 +577,7 @@ async function main() {
         appointmentCounts,
       });
 
-      const apt = generateAppointment({
+      const appointment = generateAppointment({
         date: currentDate,
         services,
         employees,
@@ -532,7 +589,7 @@ async function main() {
         employeeDayAppointments,
       });
 
-      if (apt) appointments.push(apt);
+      if (appointment) appointments.push(appointment);
     }
   }
 
@@ -540,7 +597,7 @@ async function main() {
     data: appointments,
   });
 
-  console.log("🌱 Seed completo com ScheduleOpening!");
+  console.log("Seed de clinica estetica concluido!");
 }
 
 main()

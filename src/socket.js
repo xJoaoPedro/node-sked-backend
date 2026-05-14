@@ -56,15 +56,6 @@ const socketServer = {
         socket.join(getCompanyRoom(normalizedCompanyId));
         socket.companyId = normalizedCompanyId;
       });
-
-      socket.emit("notification", {
-        notification: normalizeNotification("notification", {
-          id: `socket-connected-${socket.id}`,
-          type: "success",
-          title: "Tempo real conectado",
-          message: "A conexao em tempo real com o servidor foi estabelecida.",
-        }),
-      });
     });
 
     return io;
