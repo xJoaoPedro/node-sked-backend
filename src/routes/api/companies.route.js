@@ -58,6 +58,12 @@ companiesRouter.get('/:id/customers/summary', controller.getInitialCustomers);
 // GET /:id/settings
 companiesRouter.get('/:id/settings', controller.getSettings);
 
+// GET /:id/evolution/status
+companiesRouter.get('/:id/evolution/status', controller.getEvolutionStatus);
+
+// POST /:id/evolution/connect
+companiesRouter.post('/:id/evolution/connect', controller.connectEvolutionInstance);
+
 // PATCH /:id
 companiesRouter.patch("/:id", controller.update);
 

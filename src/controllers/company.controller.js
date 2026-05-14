@@ -291,4 +291,50 @@ export default class CompanyController {
       data: settings,
     });
   }
+
+  async getEvolutionStatus(req, res) {
+    const id = Number(req.params.id);
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const status = await service.getEvolutionInstanceStatus(id);
+
+    if (!status) {
+      return res.status(404).json({
+        message: "Empresa não encontrada",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Status da Evolution consultado com sucesso!",
+      data: status,
+    });
+  }
+
+  async connectEvolutionInstance(req, res) {
+    const id = Number(req.params.id);
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const connection = await service.connectEvolutionInstanceForCompany(id);
+
+    if (!connection) {
+      return res.status(404).json({
+        message: "Empresa não encontrada",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Processo de conexão com a Evolution iniciado com sucesso!",
+      data: connection,
+    });
+  }
 }

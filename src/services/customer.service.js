@@ -20,6 +20,69 @@ export class CustomerNotFoundError extends Error {
 }
 
 export class CustomerService {
+  async findOrCreateByCompanyAndPhone(customerData) {
+    const {
+      company_id,
+      name,
+      phone,
+    } = customerData;
+
+    const companyId = Number(company_id);
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true },
+    });
+
+    if (!company) {
+      throw new CustomerNotFoundError("Empresa nao encontrada");
+    }
+
+    const existingCustomer = await prisma.customer.findUnique({
+      where: { phone },
+    });
+
+    if (existingCustomer) {
+      const relation = await prisma.companyCustomer.findUnique({
+        where: {
+          company_id_customer_id: {
+            company_id: companyId,
+            customer_id: existingCustomer.id,
+          },
+        },
+      });
+
+      if (!relation) {
+        await prisma.companyCustomer.create({
+          data: {
+            company_id: companyId,
+            customer_id: existingCustomer.id,
+          },
+        });
+      }
+
+      return existingCustomer;
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.create({
+        data: {
+          name,
+          phone,
+        },
+      });
+
+      await tx.companyCustomer.create({
+        data: {
+          company_id: companyId,
+          customer_id: customer.id,
+        },
+      });
+
+      return customer;
+    });
+  }
+
   async create(customerData) {
     const {
       company_id,

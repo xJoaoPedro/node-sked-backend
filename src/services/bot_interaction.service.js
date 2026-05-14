@@ -6,6 +6,34 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 export class BotInteractionService {
+  async findByMessageId(messageId) {
+    if (!messageId) return null;
+
+    return prisma.botInteraction.findFirst({
+      where: {
+        data: {
+          path: ["messageId"],
+          equals: messageId,
+        },
+      },
+      orderBy: {
+        created_at: "desc",
+      },
+    });
+  }
+
+  async findLatestConversation(companyId, clientId) {
+    return prisma.botInteraction.findFirst({
+      where: {
+        company_id: Number(companyId),
+        client_id: Number(clientId),
+      },
+      orderBy: {
+        created_at: "desc",
+      },
+    });
+  }
+
   async findAll() {
     return await prisma.botInteraction.findMany();
   }

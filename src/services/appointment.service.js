@@ -326,6 +326,12 @@ export class AppointmentService {
             name: true,
           },
         },
+        employee: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         service: {
           select: {
             id: true,
@@ -337,7 +343,7 @@ export class AppointmentService {
 
     this.emitAppointmentEvent("appointment:created", createdAppointment, options);
 
-    return;
+    return createdAppointment;
   }
 
   async update(id, data, options = {}) {

@@ -2,14 +2,301 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import pkg from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { EvolutionService } from "./evolution.service.js";
 import socketServer from "../socket.js";
 
 const { PrismaClient } = pkg 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 const socket = socketServer;
+const evolutionService = new EvolutionService();
+
+function normalizeDigits(value = "") {
+  return String(value).replace(/\D/g, "");
+}
+
+function buildPhoneVariants(value = "") {
+  const digits = normalizeDigits(value);
+  const variants = new Set();
+
+  if (!digits) return [];
+
+  const addBrazilianNinthDigitVariants = (localDigits) => {
+    if (localDigits.length === 11 && localDigits[2] === "9") {
+      variants.add(`${localDigits.slice(0, 2)}${localDigits.slice(3)}`);
+    }
+
+    if (localDigits.length === 10) {
+      variants.add(`${localDigits.slice(0, 2)}9${localDigits.slice(2)}`);
+    }
+  };
+
+  variants.add(digits);
+
+  if (digits.startsWith("55") && digits.length > 11) {
+    const localDigits = digits.slice(2);
+    variants.add(localDigits);
+    addBrazilianNinthDigitVariants(localDigits);
+  }
+
+  if (digits.length >= 11) {
+    const localDigits = digits.slice(-11);
+    variants.add(localDigits);
+    addBrazilianNinthDigitVariants(localDigits);
+  }
+
+  if (digits.length >= 10) {
+    const localDigits = digits.slice(-10);
+    variants.add(localDigits);
+    addBrazilianNinthDigitVariants(localDigits);
+  }
+
+  return [...variants];
+}
+
+function comparePhoneVariants(firstValue = "", secondValue = "") {
+  const firstVariants = new Set(buildPhoneVariants(firstValue));
+  const secondVariants = new Set(buildPhoneVariants(secondValue));
+
+  if (!firstVariants.size || !secondVariants.size) return null;
+
+  for (const variant of firstVariants) {
+    if (secondVariants.has(variant)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function slugify(value = "") {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
 
 export class CompanyService {
+  getEvolutionPhoneValidation(companyPhone, connectedPhone, rawConnected = false) {
+    const phoneMatchesCompany = comparePhoneVariants(companyPhone, connectedPhone);
+    const connected = rawConnected && phoneMatchesCompany !== false;
+
+    return {
+      companyPhone: companyPhone || null,
+      connectedPhone: connectedPhone || null,
+      phoneMatchesCompany,
+      phoneMismatch: rawConnected && phoneMatchesCompany === false,
+      rawConnected,
+      connected,
+    };
+  }
+
+  buildEvolutionInstanceName(company) {
+    const base = slugify(company?.fantasy_name || company?.legal_name || "empresa");
+    return `company-${company.id}-${base || "empresa"}`;
+  }
+
+  async disconnectMismatchedEvolutionInstance(company, overview) {
+    const instanceName =
+      overview?.instanceName ||
+      company?.evolution_instance_name ||
+      this.buildEvolutionInstanceName(company);
+
+    await evolutionService.logoutInstance(instanceName).catch(() => null);
+
+    const refreshedOverview = await evolutionService.ensureConnectedInstance(instanceName).catch(() => null);
+
+    if (refreshedOverview) {
+      await this.syncEvolutionInstanceFields(company.id, refreshedOverview);
+
+      return {
+        ...refreshedOverview,
+        disconnectedWrongPhone: true,
+        phoneMismatch: true,
+        connected: false,
+        connectedPhone: null,
+      };
+    }
+
+    const fallbackOverview = {
+      instanceName,
+      state: "close",
+      qrCode: overview?.qrCode || null,
+      connectedPhone: null,
+      disconnectedWrongPhone: true,
+      phoneMismatch: true,
+      connected: false,
+    };
+
+    await this.syncEvolutionInstanceFields(company.id, fallbackOverview);
+
+    return fallbackOverview;
+  }
+
+  async syncEvolutionInstanceFields(companyId, overview) {
+    if (!companyId || !overview) return null;
+
+    const currentCompany = await prisma.company.findUnique({
+      where: { id: Number(companyId) },
+      select: {
+        evolution_last_qr: true,
+      },
+    });
+
+    return prisma.company.update({
+      where: { id: Number(companyId) },
+      data: {
+        evolution_instance_name: overview.instanceName || null,
+        evolution_connection_status: overview.state || "close",
+        evolution_connected_phone: overview.connectedPhone || null,
+        evolution_last_qr: overview.qrCode || currentCompany?.evolution_last_qr || null,
+      },
+    });
+  }
+
+  async ensureEvolutionInstanceForCompany(company) {
+    const instanceName =
+      company.evolution_instance_name || this.buildEvolutionInstanceName(company);
+
+    const ensured = await evolutionService.ensureInstance({ instanceName, qrcode: true });
+    const overview = await evolutionService.getInstanceConnectionOverview(ensured.instanceName);
+
+    await this.syncEvolutionInstanceFields(company.id, {
+      ...overview,
+      instanceName: ensured.instanceName,
+    });
+
+    return {
+      instanceName: ensured.instanceName,
+      ...overview,
+    };
+  }
+
+  async connectEvolutionInstanceForCompany(companyId) {
+    const company = await prisma.company.findUnique({
+      where: { id: Number(companyId) },
+      select: {
+        id: true,
+        fantasy_name: true,
+        legal_name: true,
+        phone: true,
+        evolution_instance_name: true,
+      },
+    });
+
+    if (!company) return null;
+
+    const overview = await evolutionService.ensureConnectedInstance(
+      company.evolution_instance_name || this.buildEvolutionInstanceName(company),
+    );
+
+    await this.syncEvolutionInstanceFields(company.id, overview);
+
+    const validation = this.getEvolutionPhoneValidation(
+      company.phone,
+      overview.connectedPhone || null,
+      overview.state === "open",
+    );
+
+    if (validation.phoneMismatch) {
+      const disconnectedOverview = await this.disconnectMismatchedEvolutionInstance(company, overview);
+
+      return {
+        ...disconnectedOverview,
+        ...this.getEvolutionPhoneValidation(company.phone, null, false),
+        disconnectedWrongPhone: true,
+        phoneMismatch: true,
+      };
+    }
+
+    return {
+      ...overview,
+      ...validation,
+    };
+  }
+
+  async getEvolutionInstanceStatus(companyId) {
+    const company = await prisma.company.findUnique({
+      where: { id: Number(companyId) },
+      select: {
+        id: true,
+        fantasy_name: true,
+        legal_name: true,
+        phone: true,
+        evolution_instance_name: true,
+        evolution_connection_status: true,
+        evolution_connected_phone: true,
+        evolution_last_qr: true,
+      },
+    });
+
+    if (!company) return null;
+
+    if (!company.evolution_instance_name) {
+      const ensured = await this.ensureEvolutionInstanceForCompany(company);
+      const validation = this.getEvolutionPhoneValidation(
+        company.phone,
+        ensured.connectedPhone || null,
+        ensured.state === "open",
+      );
+
+      return {
+        instanceName: ensured.instanceName,
+        state: ensured.state || "close",
+        qrCode: ensured.qrCode || null,
+        connectedPhone: ensured.connectedPhone || null,
+        ...validation,
+      };
+    }
+
+    const overview = await evolutionService.getInstanceConnectionOverview(company.evolution_instance_name);
+    await this.syncEvolutionInstanceFields(company.id, overview);
+
+    const currentState = overview.state || company.evolution_connection_status || "close";
+    const currentPhone = overview.connectedPhone || company.evolution_connected_phone || null;
+    const validation = this.getEvolutionPhoneValidation(
+      company.phone,
+      currentPhone,
+      currentState === "open",
+    );
+
+    if (validation.phoneMismatch) {
+      const disconnectedOverview = await this.disconnectMismatchedEvolutionInstance(company, {
+        ...overview,
+        state: currentState,
+        connectedPhone: currentPhone,
+      });
+
+      return {
+        ...disconnectedOverview,
+        ...this.getEvolutionPhoneValidation(company.phone, null, false),
+        disconnectedWrongPhone: true,
+        phoneMismatch: true,
+      };
+    }
+
+    return {
+      instanceName: overview.instanceName,
+      state: currentState,
+      qrCode: overview.qrCode || company.evolution_last_qr || null,
+      connectedPhone: currentPhone,
+      ...validation,
+    };
+  }
+
+  async findByEvolutionInstanceName(instanceName) {
+    if (!instanceName) return null;
+
+    return prisma.company.findFirst({
+      where: {
+        evolution_instance_name: instanceName,
+      },
+    });
+  }
+
   getSaoPauloDateParts(date = new Date()) {
     const formatter = new Intl.DateTimeFormat("en-CA", {
       timeZone: "America/Sao_Paulo",
@@ -225,6 +512,112 @@ export class CompanyService {
     return company ?? null;
   }
 
+  async findByWhatsAppNumber(phone) {
+    const variants = buildPhoneVariants(phone);
+
+    if (variants.length === 0) return null;
+
+    const company = await prisma.company.findFirst({
+      where: {
+        phone: {
+          in: variants,
+        },
+      },
+      select: {
+        id: true,
+        fantasy_name: true,
+        phone: true,
+        website: true,
+        email: true,
+      },
+    });
+
+    return company ?? null;
+  }
+
+  async getWhatsAppAssistantProfile(id) {
+    const [company, services, professionals] = await Promise.all([
+      prisma.company.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          fantasy_name: true,
+          legal_name: true,
+          phone: true,
+          email: true,
+          website: true,
+          accepted_payment_methods: true,
+          amenities: true,
+        },
+      }),
+      prisma.service.findMany({
+        where: { company_id: id, status: "ACTIVE" },
+        orderBy: [{ price: "asc" }, { name: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          duration_minutes: true,
+          price: true,
+          category: true,
+        },
+      }),
+      prisma.employee.findMany({
+        where: { company_id: id, status: "ACTIVE" },
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          role: true,
+          phone: true,
+          email: true,
+        },
+      }),
+    ]);
+
+    if (!company) return null;
+
+    return {
+      ...company,
+      services,
+      professionals,
+    };
+  }
+
+  buildWhatsAppAssistantContext(companyProfile) {
+    const serviceLines = companyProfile.services
+      .slice(0, 12)
+      .map((service) => {
+        const price = Number(service.price).toFixed(2).replace(".", ",");
+        const duration = service.duration_minutes ? `${service.duration_minutes} min` : "duracao nao informada";
+        return `${service.name} | ${price} | ${duration}`;
+      })
+      .join("\n");
+
+    const professionalLines = companyProfile.professionals
+      .slice(0, 10)
+      .map((professional) => `${professional.name} | ${professional.role}`)
+      .join("\n");
+
+    return [
+      `Empresa: ${companyProfile.fantasy_name}`,
+      companyProfile.legal_name ? `Razao social: ${companyProfile.legal_name}` : "",
+      companyProfile.phone ? `Telefone: ${companyProfile.phone}` : "",
+      companyProfile.email ? `Email: ${companyProfile.email}` : "",
+      companyProfile.website ? `Site: ${companyProfile.website}` : "",
+      companyProfile.accepted_payment_methods?.length
+        ? `Pagamentos: ${companyProfile.accepted_payment_methods.join(", ")}`
+        : "",
+      companyProfile.amenities?.length
+        ? `Comodidades: ${companyProfile.amenities.join(", ")}`
+        : "",
+      serviceLines ? `Servicos:\n${serviceLines}` : "Servicos: nao informados",
+      professionalLines ? `Profissionais:\n${professionalLines}` : "Profissionais: nao informados",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
   async create(company) {
     const {
       legal_name, fantasy_name, cnpj,
@@ -234,7 +627,7 @@ export class CompanyService {
     } = company;
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await prisma.company.create({
+    const createdCompany = await prisma.company.create({
       data: {
         legal_name, fantasy_name, cnpj, email,
         password: hashedPassword, phone, photo, website, accepted_payment_methods, amenities,
@@ -243,7 +636,13 @@ export class CompanyService {
       },
     });
 
-    return;
+    try {
+      await this.ensureEvolutionInstanceForCompany(createdCompany);
+    } catch (error) {
+      console.error("Erro ao provisionar instancia da Evolution para a empresa:", error.message);
+    }
+
+    return createdCompany;
   }
 
   emitCompanyUpdatedEvent(company, options = {}) {
@@ -1262,10 +1661,19 @@ export class CompanyService {
         accepted_payment_methods: true,
         amenities: true,
         low_stock_threshold: true,
+        evolution_instance_name: true,
+        evolution_connection_status: true,
+        evolution_connected_phone: true,
       },
     });
 
     if (!company) return null;
+
+    const validation = this.getEvolutionPhoneValidation(
+      company.phone,
+      company.evolution_connected_phone,
+      company.evolution_connection_status === "open",
+    );
 
     return {
       photo: company.photo,
@@ -1276,6 +1684,11 @@ export class CompanyService {
       acceptedPaymentMethods: company.accepted_payment_methods,
       amenities: company.amenities,
       lowStockThreshold: company.low_stock_threshold,
+      evolution: {
+        instanceName: company.evolution_instance_name,
+        status: company.evolution_connection_status || "close",
+        ...validation,
+      },
     };
   }
 }
