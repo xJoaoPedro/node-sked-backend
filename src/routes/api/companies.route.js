@@ -18,6 +18,9 @@ companiesRouter.get('/:id/data', controller.getAllData);
 // GET /:id/appointments (todos os agendamentos de uma empresa)
 companiesRouter.get('/:id/appointments', controller.getAppointments);
 
+// GET /:id/appointments/export (todos os agendamentos de uma empresa sem paginação)
+companiesRouter.get('/:id/appointments/export', controller.exportAppointments);
+
 // TODO DOCUMENTAR ESSA BOMBA
 // GET /:id/cancellations (todos os cancelamentos de uma empresa)
 companiesRouter.get('/:id/cancellations', controller.getCancellations);

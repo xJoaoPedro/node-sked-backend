@@ -186,6 +186,18 @@ export class EvolutionService {
     ) || null;
   }
 
+  extractInstanceProfilePicture(instancePayload) {
+    if (!instancePayload || typeof instancePayload !== "object") return null;
+
+    return (
+      instancePayload?.profilePictureUrl ||
+      instancePayload?.profilePicUrl ||
+      instancePayload?.instance?.profilePictureUrl ||
+      instancePayload?.instance?.profilePicUrl ||
+      null
+    );
+  }
+
   async ensureInstance({ instanceName, qrcode = true } = {}) {
     const normalizedInstanceName = this.getInstanceName(instanceName);
     const existingInstance = await this.findInstance(normalizedInstanceName);
@@ -222,12 +234,22 @@ export class EvolutionService {
       instance?.connectionStatus ||
       instance?.status ||
       "close";
+    const connectedPhone =
+      this.extractInstancePhone(instance) || this.extractInstancePhone(connectionState);
+    let profilePictureUrl =
+      this.extractInstanceProfilePicture(instance) ||
+      this.extractInstanceProfilePicture(connectionState);
+
+    if (!profilePictureUrl && state === "open" && connectedPhone) {
+      profilePictureUrl = await this.getProfilePictureUrl(normalizedInstanceName, connectedPhone);
+    }
 
     return {
       instanceName: normalizedInstanceName,
       state,
       qrCode: await this.extractInstanceQr(connectionState) || await this.extractInstanceQr(instance),
-      connectedPhone: this.extractInstancePhone(instance) || this.extractInstancePhone(connectionState),
+      connectedPhone,
+      profilePictureUrl,
       instance,
       connectionState,
     };
@@ -295,6 +317,19 @@ export class EvolutionService {
         ],
       },
     });
+  }
+
+  async getProfilePictureUrl(instanceName, number) {
+    if (!instanceName || !number) return null;
+
+    const response = await this.request(`/chat/fetchProfilePictureUrl/${this.getInstanceName(instanceName)}`, {
+      method: "POST",
+      body: {
+        number,
+      },
+    }).catch(() => null);
+
+    return response?.profilePictureUrl || null;
   }
 
   async sendTextWithRetry(payload, { attempts = 3, waitForOpen = true } = {}) {

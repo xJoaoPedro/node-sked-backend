@@ -58,7 +58,12 @@ export default class CompanyController {
       getRealtimeOptions(req),
     );
 
-    if (update) return res.status(204).json();
+    if (update) {
+      return res.status(200).json({
+        message: "Empresa atualizada com sucesso!",
+        data: update,
+      });
+    }
     else
       return res.status(404).json({
         message: "Empresa não encontrada",
@@ -106,6 +111,24 @@ export default class CompanyController {
 
     res.status(200).json({
       message: "Agendamentos encontrados com sucesso!",
+      data: appointments,
+    });
+  }
+
+  async exportAppointments(req, res) {
+    const id = Number(req.params.id);
+    const filters = req.query;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const appointments = await service.exportAppointments(id, filters);
+
+    res.status(200).json({
+      message: "Agendamentos exportados com sucesso!",
       data: appointments,
     });
   }

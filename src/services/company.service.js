@@ -69,6 +69,16 @@ function comparePhoneVariants(firstValue = "", secondValue = "") {
   return false;
 }
 
+function hasPhoneChanged(previousPhone = "", nextPhone = "") {
+  const previousDigits = normalizeDigits(previousPhone);
+  const nextDigits = normalizeDigits(nextPhone);
+
+  if (!previousDigits && !nextDigits) return false;
+  if (!previousDigits || !nextDigits) return previousDigits !== nextDigits;
+
+  return comparePhoneVariants(previousDigits, nextDigits) === false;
+}
+
 function slugify(value = "") {
   return String(value)
     .normalize("NFD")
@@ -173,6 +183,27 @@ export class CompanyService {
       instanceName: ensured.instanceName,
       ...overview,
     };
+  }
+
+  async resetEvolutionConnectionForPhoneChange(company) {
+    if (!company?.id) return null;
+
+    const instanceName =
+      company.evolution_instance_name || this.buildEvolutionInstanceName(company);
+
+    if (company.evolution_instance_name) {
+      await evolutionService.logoutInstance(instanceName).catch(() => null);
+    }
+
+    return prisma.company.update({
+      where: { id: Number(company.id) },
+      data: {
+        evolution_instance_name: instanceName,
+        evolution_connection_status: "close",
+        evolution_connected_phone: null,
+        evolution_last_qr: null,
+      },
+    });
   }
 
   async connectEvolutionInstanceForCompany(companyId) {
@@ -677,14 +708,41 @@ export class CompanyService {
 
   async update(id, data, options = {}) {
     try {
-      const updatedCompany = await prisma.company.update({
+      const currentCompany = await prisma.company.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          phone: true,
+          fantasy_name: true,
+          legal_name: true,
+          evolution_instance_name: true,
+        },
+      });
+
+      if (!currentCompany) {
+        return false;
+      }
+
+      const nextPhone = data.phone ?? currentCompany.phone ?? "";
+      const shouldResetEvolutionConnection = hasPhoneChanged(currentCompany.phone, nextPhone);
+
+      let updatedCompany = await prisma.company.update({
         where: { id },
         data,
       });
 
+      if (shouldResetEvolutionConnection) {
+        updatedCompany = await this.resetEvolutionConnectionForPhoneChange({
+          ...updatedCompany,
+          evolution_instance_name: currentCompany.evolution_instance_name,
+        });
+      }
+
       this.emitCompanyUpdatedEvent(updatedCompany, options);
 
-      return true;
+      return {
+        phoneChanged: shouldResetEvolutionConnection,
+      };
     } catch (error) {
       return false;
     }
@@ -1037,23 +1095,22 @@ export class CompanyService {
     }
   }
 
-  async getAppointments(id, page = 1, limit = 50, filters = {}) {
-    let hasFilter = false;
-
+  buildAppointmentFiltersWhere(id, filters = {}) {
     const where = {
       company_id: id,
     };
 
     if (filters.id) {
-      hasFilter = true;
-      
       where.id = {
         equals: Number(filters.id),
+      };
+    } else if (filters.excludeId) {
+      where.id = {
+        not: Number(filters.excludeId),
       };
     }
 
     if (filters.date) {
-      hasFilter = true;
       const baseDate = filters.date;
 
       let start = new Date(`${baseDate}T00:00:00-03:00`);
@@ -1076,16 +1133,12 @@ export class CompanyService {
     }
 
     if (filters.service) {
-      hasFilter = true;
-
       where.service = {
         name: filters.service,
       };
     }
 
     if (filters.client) {
-      hasFilter = true;
-
       where.client = {
         name: {
           contains: filters.client,
@@ -1095,10 +1148,29 @@ export class CompanyService {
     }
 
     if (filters.status) {
-      hasFilter = true;
-
       where.status = filters.status.toUpperCase();
     }
+
+    if (filters.employeeId) {
+      where.employee_id = Number(filters.employeeId);
+    }
+
+    return where;
+  }
+
+  async getAppointments(id, page = 1, limit = 50, filters = {}) {
+    const hasFilter = Boolean(
+      filters.id ||
+      filters.date ||
+      filters.service ||
+      filters.client ||
+      filters.status ||
+      filters.employeeId ||
+      filters.excludeId ||
+      filters.timeStart ||
+      filters.timeEnd
+    );
+    const where = this.buildAppointmentFiltersWhere(id, filters);
 
     page = hasFilter ? 1 : Number(page);
 
@@ -1125,6 +1197,20 @@ export class CompanyService {
       totalPages: Math.ceil(total / limit),
 
     };
+  }
+
+  async exportAppointments(id, filters = {}) {
+    const where = this.buildAppointmentFiltersWhere(id, filters);
+
+    return prisma.appointment.findMany({
+      where,
+      orderBy: { start_time: "desc" },
+      include: {
+        client: true,
+        service: true,
+        employee: true,
+      },
+    });
   }
 
   async getServices(id) {
@@ -1669,10 +1755,28 @@ export class CompanyService {
 
     if (!company) return null;
 
+    let currentState = company.evolution_connection_status || "close";
+    let currentConnectedPhone = company.evolution_connected_phone || null;
+    let currentProfilePictureUrl = null;
+
+    if (company.evolution_instance_name) {
+      const overview = await evolutionService.getInstanceConnectionOverview(
+        company.evolution_instance_name,
+      ).catch(() => null);
+
+      if (overview) {
+        currentState = overview.state || currentState;
+        currentConnectedPhone = overview.connectedPhone || currentConnectedPhone;
+        currentProfilePictureUrl = overview.profilePictureUrl || null;
+
+        await this.syncEvolutionInstanceFields(id, overview).catch(() => null);
+      }
+    }
+
     const validation = this.getEvolutionPhoneValidation(
       company.phone,
-      company.evolution_connected_phone,
-      company.evolution_connection_status === "open",
+      currentConnectedPhone,
+      currentState === "open",
     );
 
     return {
@@ -1686,7 +1790,8 @@ export class CompanyService {
       lowStockThreshold: company.low_stock_threshold,
       evolution: {
         instanceName: company.evolution_instance_name,
-        status: company.evolution_connection_status || "close",
+        status: currentState,
+        profilePictureUrl: currentProfilePictureUrl,
         ...validation,
       },
     };

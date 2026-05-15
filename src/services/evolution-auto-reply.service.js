@@ -15,6 +15,10 @@ function normalizeDigits(value = "") {
 function toLocalStoragePhone(value = "") {
   const digits = normalizeDigits(value);
 
+  if (digits.startsWith("55") && digits.length >= 12 && digits.length <= 13) {
+    return digits.slice(2);
+  }
+
   if (digits.length <= 11) return digits;
   return digits.slice(-11);
 }
@@ -259,6 +263,33 @@ export class EvolutionAutoReplyService {
     }
   }
 
+  async interpretAppointmentMessage({
+    companyProfile,
+    customerName,
+    customerMessage,
+    latestInteraction,
+  }) {
+    if (!this.anthropicService.isConfigured) {
+      return null;
+    }
+
+    const companyContext = this.companyService.buildWhatsAppAssistantContext(companyProfile);
+
+    try {
+      return await this.anthropicService.interpretAppointmentMessage({
+        companyContext,
+        customerName,
+        customerMessage,
+        services: companyProfile?.services || [],
+        professionals: companyProfile?.professionals || [],
+        previousState: latestInteraction?.data?.conversationState || null,
+      });
+    } catch (error) {
+      console.error("Anthropic appointment interpretation:", error.message);
+      return null;
+    }
+  }
+
   async handleWebhook(body = {}) {
     if (!this.enabled) return;
     if (body.event !== "messages.upsert") return;
@@ -295,12 +326,19 @@ export class EvolutionAutoReplyService {
       company.id,
       customer.id,
     );
+    const messageInterpretation = await this.interpretAppointmentMessage({
+      companyProfile,
+      customerName: customer.name,
+      customerMessage,
+      latestInteraction,
+    });
     const appointmentReply = await this.whatsAppAppointmentAssistantService.handleMessage({
       company,
       companyProfile,
       customer,
       customerMessage,
       latestInteraction,
+      messageInterpretation,
     });
     const rawReplyText = appointmentReply?.responseAction
       ? await this.generateStructuredAppointmentReply({

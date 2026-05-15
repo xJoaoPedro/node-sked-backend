@@ -7,11 +7,63 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
 const prisma = new PrismaClient({ adapter })
 
 function normalizeText(value = "") {
-  return String(value)
+  const normalized = String(value)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    .replace(/[^\p{L}\p{N}:/\s-]+/gu, " ")
+    .replace(/\b(\p{L})\1{2,}\b/gu, "$1")
+    .replace(/\s+/g, " ")
     .trim()
+
+  return expandCommonAbbreviations(normalized)
+}
+
+function expandCommonAbbreviations(value = "") {
+  const replacements = [
+    [/\bvcs?\b/g, "voce"],
+    [/\bvc\b/g, "voce"],
+    [/\bq\b/g, "que"],
+    [/\bpq\b/g, "porque"],
+    [/\bpk\b/g, "porque"],
+    [/\bqr\b/g, "quero"],
+    [/\bqro\b/g, "quero"],
+    [/\bkero\b/g, "quero"],
+    [/\bblz\b/g, "beleza"],
+    [/\bmsg\b/g, "mensagem"],
+    [/\bag\b/g, "agora"],
+    [/\bhj\b/g, "hoje"],
+    [/\bamanh[ae]\b/g, "amanha"],
+    [/\bdsclp\b/g, "desculpa"],
+    [/\bobg\b/g, "obrigado"],
+    [/\bobgd\b/g, "obrigado"],
+    [/\bobrigad[ao]o+\b/g, "obrigado"],
+    [/\btbm\b/g, "tambem"],
+    [/\btb\b/g, "tambem"],
+    [/\bpoderia\s+ser\b/g, "pode ser"],
+    [/\bpd\s+ser\b/g, "pode ser"],
+    [/\bpode\s+se\b/g, "pode ser"],
+    [/\bpdp\b/g, "pode"],
+    [/\bcmg\b/g, "comigo"],
+    [/\bc\/\b/g, "com "],
+    [/\bs\/\b/g, "sem "],
+    [/\bhorar?io\b/g, "horario"],
+    [/\bagendr\b/g, "agendar"],
+    [/\bagendamnto\b/g, "agendamento"],
+    [/\bmarc[ae]r\b/g, "marcar"],
+    [/\bserv\b/g, "servico"],
+    [/\bprof\b/g, "profissional"],
+    [/\bcartaoo+\b/g, "cartao"],
+    [/\bpixx+\b/g, "pix"],
+    [/\bnaum\b/g, "nao"],
+    [/\bneh\b/g, "nao"],
+    [/\bnum\b/g, "nao"],
+    [/\bn\b/g, "nao"],
+    [/\bss\b/g, "sim"],
+    [/\bsimm+\b/g, "sim"],
+  ]
+
+  return replacements.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value)
 }
 
 function pad(value) {
@@ -36,6 +88,10 @@ function professionalReference(name = "") {
 
 function removeDuplicateStrings(values = []) {
   return [...new Set(values.filter(Boolean))]
+}
+
+function uniqueNonEmptyStrings(values = []) {
+  return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))]
 }
 
 function formatCurrency(value) {
@@ -101,11 +157,16 @@ export class WhatsAppAppointmentAssistantService {
     return [
       "sim",
       "s",
+      "ss",
       "pode",
       "pode sim",
+      "pode ser",
       "confirmo",
       "confirmar",
       "ok",
+      "okk",
+      "blz",
+      "beleza",
       "fechado",
       "isso",
       "quero",
@@ -117,6 +178,7 @@ export class WhatsAppAppointmentAssistantService {
     return [
       "nao",
       "n",
+      "na",
       "nao quero",
       "cancelar",
       "deixa",
@@ -154,6 +216,7 @@ export class WhatsAppAppointmentAssistantService {
       "agendamento",
       "marcar",
       "marcacao",
+      "marcamento",
       "horario",
       "disponibilidade",
       "disponivel",
@@ -167,6 +230,11 @@ export class WhatsAppAppointmentAssistantService {
       "tem horario para",
       "tem vaga",
       "quero atendimento com",
+      "consigo marcar",
+      "queria marcar",
+      "queria agendar",
+      "preciso agendar",
+      "quero agendar",
     ].some((term) => normalized.includes(term))
   }
 
@@ -336,6 +404,36 @@ export class WhatsAppAppointmentAssistantService {
   getSelectedProfessionalFromState(state, professionals = []) {
     if (!state?.employeeId) return null
     return professionals.find((professional) => professional.id === Number(state.employeeId)) || null
+  }
+
+  findServiceByHint(hint = "", services = []) {
+    const normalizedHint = normalizeText(hint)
+    if (!normalizedHint) return null
+
+    const candidates = this.getServiceCandidates(normalizedHint, services)
+    if (candidates.length === 1) return candidates[0].service
+
+    return services.find((service) => {
+      const serviceName = normalizeText(service.name)
+      return serviceName === normalizedHint || serviceName.includes(normalizedHint) || normalizedHint.includes(serviceName)
+    }) || null
+  }
+
+  findProfessionalByHint(hint = "", professionals = []) {
+    const normalizedHint = normalizeText(hint)
+    if (!normalizedHint) return null
+
+    const candidates = this.getProfessionalCandidates(normalizedHint, professionals)
+    if (candidates.length === 1) return candidates[0].professional
+
+    return professionals.find((professional) => {
+      const professionalName = normalizeText(professional.name)
+      return (
+        professionalName === normalizedHint ||
+        professionalName.includes(normalizedHint) ||
+        normalizedHint.includes(professionalName)
+      )
+    }) || null
   }
 
   getServiceCandidates(message = "", services = []) {
@@ -538,7 +636,7 @@ export class WhatsAppAppointmentAssistantService {
     const normalized = normalizeText(message)
     const explicitMatch = normalized.match(/\b(\d{1,2})(?:[:h](\d{2}))\b/)
     const shortHourMatch = normalized.match(/\b(\d{1,2})h\b/)
-    const contextualHourMatch = normalized.match(/\b(?:as|às|para|pra|por volta de)\s+(\d{1,2})\b/)
+    const contextualHourMatch = normalized.match(/\b(?:as|para|pra|por volta de|umas?)\s+(\d{1,2})\b/)
     const isolatedHourMatch = normalized.match(/^(\d{1,2})$/)
 
     let match = explicitMatch || shortHourMatch || contextualHourMatch || isolatedHourMatch
@@ -1191,55 +1289,85 @@ export class WhatsAppAppointmentAssistantService {
     customer,
     customerMessage,
     latestInteraction,
+    messageInterpretation = null,
   }) {
     const previousState = this.getConversationState(latestInteraction)
     const serviceOptions = companyProfile.services
       .slice()
       .sort((a, b) => Number(a.price) - Number(b.price) || a.name.localeCompare(b.name))
-    const normalizedMessage = normalizeText(customerMessage)
+    const interpretationConfidence = Number(messageInterpretation?.confidence || 0)
+    const interpretedMessage =
+      interpretationConfidence >= 0.45 && messageInterpretation?.normalizedMessage
+        ? messageInterpretation.normalizedMessage
+        : ""
+    const interpretedDateReference =
+      interpretationConfidence >= 0.45 ? messageInterpretation?.dateReference || "" : ""
+    const interpretedTimeReference =
+      interpretationConfidence >= 0.45 ? messageInterpretation?.timeReference || "" : ""
+    const interpretedPeriodReference =
+      interpretationConfidence >= 0.45 ? messageInterpretation?.periodReference || "" : ""
+    const messageText = uniqueNonEmptyStrings([
+      customerMessage,
+      interpretedMessage,
+      interpretedDateReference,
+      interpretedTimeReference,
+      interpretedPeriodReference,
+    ]).join(" ")
     const continuingConversation = previousState && previousState.phase && previousState.phase !== "completed"
-    const schedulingIntent = continuingConversation || this.isSchedulingIntent(customerMessage)
+    const interpretedIntent = messageInterpretation?.intentCategory || "unknown"
+    const schedulingIntent =
+      continuingConversation ||
+      interpretedIntent === "scheduling" ||
+      this.isSchedulingIntent(messageText)
     const currentService = this.getSelectedServiceFromState(previousState, serviceOptions)
     const currentProfessional = this.getSelectedProfessionalFromState(previousState, companyProfile.professionals || [])
-    const professionalCandidates = this.getProfessionalCandidates(customerMessage, companyProfile.professionals || [])
+    const interpretedProfessional =
+      interpretationConfidence >= 0.55
+        ? this.findProfessionalByHint(messageInterpretation?.professionalName, companyProfile.professionals || [])
+        : null
+    const professionalCandidates = this.getProfessionalCandidates(messageText, companyProfile.professionals || [])
     const explicitProfessionalFromMessage = professionalCandidates.length === 1
       ? professionalCandidates[0].professional
       : null
-    const serviceCandidatesFromMessage = this.getServiceCandidates(customerMessage, serviceOptions)
+    const interpretedService =
+      interpretationConfidence >= 0.55
+        ? this.findServiceByHint(messageInterpretation?.serviceName, serviceOptions)
+        : null
+    const serviceCandidatesFromMessage = this.getServiceCandidates(messageText, serviceOptions)
     const explicitServiceFromMessage = serviceCandidatesFromMessage.length === 1
       ? serviceCandidatesFromMessage[0].service
       : null
-    const selectedProfessionalFromMessage = explicitProfessionalFromMessage || currentProfessional
-    const selectedServiceFromMessage = explicitServiceFromMessage || currentService
+    const selectedProfessionalFromMessage = interpretedProfessional || explicitProfessionalFromMessage || currentProfessional
+    const selectedServiceFromMessage = interpretedService || explicitServiceFromMessage || currentService
 
-    if (explicitProfessionalFromMessage && !explicitServiceFromMessage && this.isSchedulingIntent(customerMessage)) {
-      const professionalServices = await this.getServicesForProfessional(company.id, explicitProfessionalFromMessage.id)
+    if (selectedProfessionalFromMessage && !selectedServiceFromMessage && schedulingIntent) {
+      const professionalServices = await this.getServicesForProfessional(company.id, selectedProfessionalFromMessage.id)
 
       return this.buildStructuredReply(
         "ask_service_with_professional",
         {
-          professionalName: explicitProfessionalFromMessage.name,
+          professionalName: selectedProfessionalFromMessage.name,
           services: professionalServices.slice(0, 5),
         },
         {
           fallbackText: this.buildAskServiceWithProfessionalReply(
             customer.name,
-            explicitProfessionalFromMessage,
+            selectedProfessionalFromMessage,
             professionalServices,
           ),
           interactionType: "APPOINTMENT",
           interactionStatus: "IN_PROGRESS",
           conversationState: this.buildStatePayload({
             phase: "awaiting_service",
-            employeeId: explicitProfessionalFromMessage.id,
-            employeeName: explicitProfessionalFromMessage.name,
+            employeeId: selectedProfessionalFromMessage.id,
+            employeeName: selectedProfessionalFromMessage.name,
             serviceOptions: professionalServices.slice(0, 5),
           }),
         },
       )
     }
 
-    if (this.isRestartIntent(customerMessage)) {
+    if (interpretedIntent === "restart" || this.isRestartIntent(messageText)) {
       return this.buildStructuredReply(
         "restart_flow",
         { services: serviceOptions.slice(0, 5) },
@@ -1255,7 +1383,7 @@ export class WhatsAppAppointmentAssistantService {
       )
     }
 
-    if (this.isNoSchedulingIntent(customerMessage)) {
+    if (interpretedIntent === "no_scheduling" || this.isNoSchedulingIntent(messageText)) {
       return this.buildStructuredReply(
         "no_scheduling",
         {},
@@ -1268,7 +1396,7 @@ export class WhatsAppAppointmentAssistantService {
       )
     }
 
-    if (this.isPaymentIntent(customerMessage)) {
+    if (interpretedIntent === "payment" || this.isPaymentIntent(messageText)) {
       return this.buildStructuredReply(
         "payment_info",
         { paymentMethods: companyProfile?.accepted_payment_methods || [] },
@@ -1281,7 +1409,7 @@ export class WhatsAppAppointmentAssistantService {
       )
     }
 
-    if (this.isAmenitiesIntent(customerMessage)) {
+    if (interpretedIntent === "amenities" || this.isAmenitiesIntent(messageText)) {
       return this.buildStructuredReply(
         "amenities_info",
         { amenities: companyProfile?.amenities || [] },
@@ -1294,7 +1422,7 @@ export class WhatsAppAppointmentAssistantService {
       )
     }
 
-    if (this.wantsToChangeService(customerMessage, currentService)) {
+    if (this.wantsToChangeService(messageText, currentService)) {
       return this.buildStructuredReply(
         "change_service",
         { services: serviceOptions.slice(0, 5) },
@@ -1311,7 +1439,7 @@ export class WhatsAppAppointmentAssistantService {
     }
 
     if (currentService) {
-      const serviceCandidates = this.getServiceCandidates(customerMessage, serviceOptions)
+      const serviceCandidates = this.getServiceCandidates(messageText, serviceOptions)
       if (serviceCandidates.length === 1 && serviceCandidates[0].service.id !== currentService.id) {
         const nextService = serviceCandidates[0].service
 
@@ -1331,7 +1459,7 @@ export class WhatsAppAppointmentAssistantService {
       }
     }
 
-    if (selectedServiceFromMessage && this.isServiceInfoIntent(customerMessage)) {
+    if (selectedServiceFromMessage && (interpretedIntent === "service_info" || this.isServiceInfoIntent(messageText))) {
       const professionalsResult = await this.getProfessionalsForService(company.id, selectedServiceFromMessage.id)
 
       return this.buildStructuredReply(
@@ -1353,7 +1481,7 @@ export class WhatsAppAppointmentAssistantService {
       )
     }
 
-    if (selectedProfessionalFromMessage && this.isProfessionalInfoIntent(customerMessage)) {
+    if (selectedProfessionalFromMessage && (interpretedIntent === "professional_info" || this.isProfessionalInfoIntent(messageText))) {
       const services = await this.getServicesForProfessional(company.id, selectedProfessionalFromMessage.id)
 
       return this.buildStructuredReply(
@@ -1371,8 +1499,10 @@ export class WhatsAppAppointmentAssistantService {
       )
     }
 
-    if (selectedProfessionalFromMessage && this.isProfessionalScheduleIntent(customerMessage)) {
-      const requestedDate = this.parseDateFromMessage(customerMessage)
+    if (selectedProfessionalFromMessage && (interpretedIntent === "professional_schedule" || this.isProfessionalScheduleIntent(messageText))) {
+      const requestedDate =
+        this.parseDateFromMessage(messageText) ||
+        (interpretedDateReference ? this.parseDateFromMessage(interpretedDateReference) : null)
       const requestedServiceForSchedule = selectedServiceFromMessage
 
       if (requestedDate) {
@@ -1454,7 +1584,7 @@ export class WhatsAppAppointmentAssistantService {
       )
     }
 
-    if (!schedulingIntent) {
+    if (interpretedIntent === "out_of_scope" || !schedulingIntent) {
       return this.buildStructuredReply(
         "out_of_scope",
         {},
@@ -1468,7 +1598,7 @@ export class WhatsAppAppointmentAssistantService {
     }
 
     if (previousState?.phase === "awaiting_confirmation") {
-      if (this.isAffirmative(customerMessage)) {
+      if (interpretedIntent === "affirmative" || this.isAffirmative(messageText)) {
         try {
           const createdAppointment = await this.confirmAppointment({
             company,
@@ -1536,7 +1666,7 @@ export class WhatsAppAppointmentAssistantService {
         }
       }
 
-      if (this.isNegative(customerMessage)) {
+      if (interpretedIntent === "negative" || this.isNegative(messageText)) {
         return this.buildStructuredReply(
           "restart_appointment",
           { services: serviceOptions.slice(0, 5) },
@@ -1553,18 +1683,20 @@ export class WhatsAppAppointmentAssistantService {
       }
     }
 
-    let selectedService = this.getSelectedServiceFromState(previousState, serviceOptions)
-    let selectedProfessional = this.getSelectedProfessionalFromState(previousState, companyProfile.professionals || [])
+    let selectedService = this.getSelectedServiceFromState(previousState, serviceOptions) || interpretedService
+    let selectedProfessional = this.getSelectedProfessionalFromState(previousState, companyProfile.professionals || []) || interpretedProfessional
     let selectedDate = previousState?.dateString || null
     let selectedTime = previousState?.timeString || null
-    const requestedPeriod = this.parsePeriodFromMessage(customerMessage) || (
+    const requestedPeriod = this.parsePeriodFromMessage(messageText) || (
+      interpretedPeriodReference ? this.parsePeriodFromMessage(interpretedPeriodReference) : null
+    ) || (
       previousState?.periodKey
         ? { key: previousState.periodKey, label: previousState.periodLabel || null }
         : null
     )
 
     if (!selectedProfessional) {
-      const professionalCandidates = this.getProfessionalCandidates(customerMessage, companyProfile.professionals || [])
+      const professionalCandidates = this.getProfessionalCandidates(messageText, companyProfile.professionals || [])
 
       if (professionalCandidates.length === 1) {
         selectedProfessional = professionalCandidates[0].professional
@@ -1572,12 +1704,12 @@ export class WhatsAppAppointmentAssistantService {
     }
 
     if (!selectedService) {
-      const serviceOptionIndex = this.extractOptionIndex(customerMessage, previousState?.serviceOptions?.length || 0)
+      const serviceOptionIndex = this.extractOptionIndex(messageText, previousState?.serviceOptions?.length || 0)
 
       if (serviceOptionIndex !== null && previousState?.serviceOptions?.[serviceOptionIndex]) {
         selectedService = previousState.serviceOptions[serviceOptionIndex]
       } else {
-        const candidates = this.getServiceCandidates(customerMessage, serviceOptions)
+        const candidates = this.getServiceCandidates(messageText, serviceOptions)
 
         if (candidates.length === 1) {
           selectedService = candidates[0].service
@@ -1651,7 +1783,10 @@ export class WhatsAppAppointmentAssistantService {
       }
     }
 
-    selectedDate = this.parseDateFromMessage(customerMessage) || selectedDate
+    selectedDate =
+      this.parseDateFromMessage(messageText) ||
+      (interpretedDateReference ? this.parseDateFromMessage(interpretedDateReference) : null) ||
+      selectedDate
 
     if (!selectedDate) {
       return this.buildStructuredReply(
@@ -1678,7 +1813,7 @@ export class WhatsAppAppointmentAssistantService {
       )
     }
 
-    const slotOptionIndex = this.extractOptionIndex(customerMessage, previousState?.slotOptions?.length || 0)
+    const slotOptionIndex = this.extractOptionIndex(messageText, previousState?.slotOptions?.length || 0)
     if (slotOptionIndex !== null && previousState?.slotOptions?.[slotOptionIndex]) {
       const selectedSlot = previousState.slotOptions[slotOptionIndex]
 
@@ -1704,7 +1839,10 @@ export class WhatsAppAppointmentAssistantService {
       )
     }
 
-    selectedTime = this.parseTimeFromMessage(customerMessage) || selectedTime
+    selectedTime =
+      this.parseTimeFromMessage(messageText) ||
+      (interpretedTimeReference ? this.parseTimeFromMessage(interpretedTimeReference) : null) ||
+      selectedTime
 
     if (!selectedTime) {
       const slots = await this.getAvailableSlots({

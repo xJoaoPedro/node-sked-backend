@@ -2,6 +2,27 @@ function trimResponse(text = "") {
   return text.replace(/\s+\n/g, "\n").trim();
 }
 
+function extractFirstJsonObject(text = "") {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+
+  if (start === -1 || end === -1 || end <= start) return null;
+
+  return text.slice(start, end + 1);
+}
+
+function safeParseJson(text = "") {
+  const jsonCandidate = extractFirstJsonObject(text);
+
+  if (!jsonCandidate) return null;
+
+  try {
+    return JSON.parse(jsonCandidate);
+  } catch {
+    return null;
+  }
+}
+
 export class AnthropicService {
   constructor() {
     this.apiKey = process.env.ANTHROPIC_API_KEY || "";
@@ -11,6 +32,99 @@ export class AnthropicService {
 
   get isConfigured() {
     return Boolean(this.apiKey);
+  }
+
+  async interpretAppointmentMessage({
+    companyContext,
+    customerName,
+    customerMessage,
+    services = [],
+    professionals = [],
+    previousState = null,
+  }) {
+    if (!this.isConfigured || !customerMessage?.trim()) {
+      return null;
+    }
+
+    const servicesSummary = services
+      .slice(0, 20)
+      .map((service) => `- ${service.name}`)
+      .join("\n");
+    const professionalsSummary = professionals
+      .slice(0, 20)
+      .map((professional) => `- ${professional.name}`)
+      .join("\n");
+
+    const response = await fetch(`${this.baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": this.apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: 400,
+        system:
+          "Você é um interpretador de mensagens de WhatsApp em pt-BR para um sistema de agendamento. " +
+          "Sua tarefa é entender a intenção do cliente mesmo com abreviações, internetês, erros gramaticais, falta de acento, digitação ruim e frases incompletas. " +
+          "Converta a mensagem para uma forma clara sem mudar o significado. " +
+          "Extraia somente o que for provável e não invente dados. " +
+          "Responda apenas com JSON válido, sem markdown, sem comentários e sem texto fora do JSON. " +
+          "Use este schema: " +
+          "{\"normalizedMessage\":string,\"intentCategory\":string,\"serviceName\":string|null,\"professionalName\":string|null,\"dateReference\":string|null,\"timeReference\":string|null,\"periodReference\":string|null,\"confidence\":number}. " +
+          "intentCategory deve ser um entre: scheduling, payment, amenities, service_info, professional_info, professional_schedule, restart, no_scheduling, affirmative, negative, out_of_scope, unknown. " +
+          "confidence deve ir de 0 a 1.",
+        messages: [
+          {
+            role: "user",
+            content:
+              `Contexto da empresa:\n${companyContext}\n\n` +
+              `Serviços conhecidos:\n${servicesSummary || "- nenhum"}\n\n` +
+              `Profissionais conhecidos:\n${professionalsSummary || "- nenhum"}\n\n` +
+              `Estado anterior da conversa:\n${JSON.stringify(previousState || {}, null, 2)}\n\n` +
+              `Nome do cliente: ${customerName || "Cliente"}\n` +
+              `Mensagem original do cliente: ${customerMessage}\n\n` +
+              "Retorne apenas o JSON.",
+          },
+        ],
+      }),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(`Anthropic respondeu ${response.status}: ${JSON.stringify(payload)}`);
+    }
+
+    const text = payload?.content
+      ?.filter((item) => item?.type === "text")
+      ?.map((item) => item.text)
+      ?.join("\n");
+
+    const parsed = safeParseJson(text || "");
+
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    return {
+      normalizedMessage:
+        typeof parsed.normalizedMessage === "string" ? trimResponse(parsed.normalizedMessage) : null,
+      intentCategory:
+        typeof parsed.intentCategory === "string" ? parsed.intentCategory.trim().toLowerCase() : "unknown",
+      serviceName: typeof parsed.serviceName === "string" ? trimResponse(parsed.serviceName) : null,
+      professionalName:
+        typeof parsed.professionalName === "string" ? trimResponse(parsed.professionalName) : null,
+      dateReference: typeof parsed.dateReference === "string" ? trimResponse(parsed.dateReference) : null,
+      timeReference: typeof parsed.timeReference === "string" ? trimResponse(parsed.timeReference) : null,
+      periodReference:
+        typeof parsed.periodReference === "string" ? trimResponse(parsed.periodReference) : null,
+      confidence:
+        typeof parsed.confidence === "number"
+          ? Math.max(0, Math.min(1, parsed.confidence))
+          : 0,
+    };
   }
 
   async generateCompanyReply({ companyContext, customerName, customerMessage }) {
@@ -31,6 +145,8 @@ export class AnthropicService {
         system:
           "Você responde no WhatsApp em pt-BR como atendente de agendamentos da empresa. " +
           "Escreva de forma natural, humana, cordial e objetiva, com acentuação e pontuação corretas. " +
+          "Entenda muito bem abreviações, internetês, falta de acentos, erros gramaticais, erros de digitação, palavras cortadas e escrita informal do cliente. " +
+          "Interprete a intenção provável do cliente mesmo quando a frase vier com português imperfeito. " +
           "Adapte o estilo de atendimento ao tipo de estabelecimento com base no contexto da empresa, serviços e profissionais. " +
           "Ajuste o tom de acordo com o contexto da empresa" +
           "Use apenas as informações fornecidas no contexto e não invente dados ausentes. " +
@@ -94,6 +210,7 @@ export class AnthropicService {
         system:
           "Você é um atendente humano de WhatsApp da empresa. " +
           "Reescreva a resposta para soar natural, calorosa, profissional e brasileira, com boa pontuação e acentuação. " +
+          "Considere que a mensagem do cliente pode conter abreviações, erros gramaticais e digitação informal; ainda assim, preserve a intenção correta. " +
           "Adapte o tom ao que o cliente acabou de dizer. " +
           "Adapte também o estilo ao tipo de estabelecimento com base no contexto da empresa, serviços e profissionais. " +
           "Se parecer uma clínica estética, use um tom mais acolhedor, cuidadoso e consultivo. " +
@@ -157,6 +274,7 @@ export class AnthropicService {
         system:
           "Você é um atendente humano de WhatsApp da empresa. " +
           "Escreva a resposta final em pt-BR de forma natural, calorosa, profissional e objetiva. " +
+          "Considere que a mensagem do cliente pode conter abreviações, internetês, falta de acentos e erros de digitação; interprete a intenção antes de responder. " +
           "Adapte o tom ao que o cliente acabou de dizer e ao tipo de estabelecimento com base no contexto da empresa. " +
           "Nao tente inferir genero pelo nome do cliente. " +
           "Quando precisar de uma forma com genero, prefira construcoes inclusivas como bem-vindo(a). " +
