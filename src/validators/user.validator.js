@@ -9,5 +9,11 @@ const validator = z.object({
   last_login: z.date().nullable().optional(),
 });
 
+const loginValidator = z.object({
+  email: z.email().max(255),
+  password: z.string().min(6).max(30),
+});
+
 export const createUserValidator = validator;
 export const updateUserValidator = validator.partial();
+export const loginUserValidator = loginValidator;

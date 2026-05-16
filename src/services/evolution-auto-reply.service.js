@@ -7,6 +7,7 @@ import { WhatsAppAppointmentAssistantService } from "./whatsapp-appointment-assi
 
 const MESSAGE_DEDUP_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_MESSAGE_AGE_SECONDS = 180;
+const RECONNECT_BACKLOG_GRACE_MS = 5000;
 
 function normalizeDigits(value = "") {
   return String(value).replace(/\D/g, "");
@@ -59,6 +60,7 @@ export class EvolutionAutoReplyService {
     this.anthropicService = new AnthropicService();
     this.whatsAppAppointmentAssistantService = new WhatsAppAppointmentAssistantService();
     this.processedMessages = new Map();
+    this.instanceReconnectStartedAt = new Map();
   }
 
   pruneProcessedMessages() {
@@ -123,17 +125,57 @@ export class EvolutionAutoReplyService {
     return null;
   }
 
-  isStaleMessage(payloadData = {}) {
+  extractConnectionState(body = {}) {
+    return (
+      body?.data?.state ||
+      body?.data?.status ||
+      body?.state ||
+      body?.status ||
+      ""
+    )
+      .toString()
+      .trim()
+      .toLowerCase();
+  }
+
+  markInstanceReconnect(instanceName, timestamp = Date.now()) {
+    if (!instanceName) return;
+    this.instanceReconnectStartedAt.set(instanceName, timestamp);
+  }
+
+  clearExpiredReconnectMarkers() {
+    const now = Date.now();
+
+    for (const [instanceName, timestamp] of this.instanceReconnectStartedAt.entries()) {
+      if (now - timestamp > MESSAGE_DEDUP_TTL_MS) {
+        this.instanceReconnectStartedAt.delete(instanceName);
+      }
+    }
+  }
+
+  getReconnectStartedAt(instanceName) {
+    this.clearExpiredReconnectMarkers();
+    return this.instanceReconnectStartedAt.get(instanceName) || null;
+  }
+
+  isStaleMessage(payloadData = {}, instanceName = "") {
     const messageTimestampMs = this.extractMessageTimestamp(payloadData);
     if (!messageTimestampMs) return false;
 
     const now = Date.now();
+    const reconnectStartedAt = this.getReconnectStartedAt(instanceName);
+    const reconnectCutoff = reconnectStartedAt
+      ? reconnectStartedAt - RECONNECT_BACKLOG_GRACE_MS
+      : null;
     const oldestAllowedTimestamp = Math.max(
       this.startedAt - 15 * 1000,
       now - this.maxMessageAgeMs,
     );
 
-    return messageTimestampMs < oldestAllowedTimestamp;
+    return (
+      messageTimestampMs < oldestAllowedTimestamp ||
+      (reconnectCutoff !== null && messageTimestampMs < reconnectCutoff)
+    );
   }
 
   isInboundDirectMessage(payloadData = {}) {
@@ -269,21 +311,56 @@ export class EvolutionAutoReplyService {
     customerMessage,
     latestInteraction,
   }) {
-    if (!this.anthropicService.isConfigured) {
+    const fallbackDecision = this.whatsAppAppointmentAssistantService.shouldUseInterpretationFallback({
+      companyProfile,
+      customerMessage,
+      latestInteraction,
+    });
+
+    if (!this.anthropicService.isConfigured || !fallbackDecision.shouldUseAi) {
       return null;
     }
 
-    const companyContext = this.companyService.buildWhatsAppAssistantContext(companyProfile);
+    const relevantServices = this.whatsAppAppointmentAssistantService.getRelevantServices(
+      customerMessage,
+      companyProfile?.services || [],
+      5,
+    );
+    const relevantProfessionals = this.whatsAppAppointmentAssistantService.getRelevantProfessionals(
+      customerMessage,
+      companyProfile?.professionals || [],
+      5,
+    );
+    const companyContext = [
+      `Empresa: ${companyProfile?.fantasy_name || "Empresa"}`,
+      companyProfile?.accepted_payment_methods?.length
+        ? `Pagamentos: ${companyProfile.accepted_payment_methods.join(", ")}`
+        : "",
+      companyProfile?.amenities?.length
+        ? `Comodidades: ${companyProfile.amenities.join(", ")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     try {
-      return await this.anthropicService.interpretAppointmentMessage({
+      const interpretation = await this.anthropicService.interpretAppointmentMessage({
         companyContext,
         customerName,
         customerMessage,
-        services: companyProfile?.services || [],
-        professionals: companyProfile?.professionals || [],
+        services: relevantServices,
+        professionals: relevantProfessionals,
         previousState: latestInteraction?.data?.conversationState || null,
       });
+
+      if (interpretation) {
+        return {
+          ...interpretation,
+          _usedAiFallback: true,
+        };
+      }
+
+      return null;
     } catch (error) {
       console.error("Anthropic appointment interpretation:", error.message);
       return null;
@@ -292,12 +369,26 @@ export class EvolutionAutoReplyService {
 
   async handleWebhook(body = {}) {
     if (!this.enabled) return;
+    if (body.event === "connection.update") {
+      const connectionState = this.extractConnectionState(body);
+
+      if (connectionState && connectionState !== "open") {
+        this.markInstanceReconnect(body.instance || body.data?.instance || "");
+      }
+
+      if (connectionState === "open") {
+        this.markInstanceReconnect(body.instance || body.data?.instance || "");
+      }
+
+      return;
+    }
+
     if (body.event !== "messages.upsert") return;
 
     const payloadData = body.data || {};
 
     if (!this.isInboundDirectMessage(payloadData)) return;
-    if (this.isStaleMessage(payloadData)) return;
+    if (this.isStaleMessage(payloadData, body.instance)) return;
 
     const messageId = this.extractMessageId(payloadData);
     if (!messageId || this.wasProcessed(messageId)) return;
@@ -340,27 +431,11 @@ export class EvolutionAutoReplyService {
       latestInteraction,
       messageInterpretation,
     });
-    const rawReplyText = appointmentReply?.responseAction
-      ? await this.generateStructuredAppointmentReply({
-          companyProfile,
-          customerName: customer.name,
-          customerMessage,
-          responseAction: appointmentReply.responseAction,
-          responseData: appointmentReply.responseData,
-          fallbackReply: appointmentReply.replyText || "",
-        })
-      : appointmentReply?.replyText
-        ? await this.humanizeAppointmentReply({
-            companyProfile,
-            customerName: customer.name,
-            customerMessage,
-            draftedReply: appointmentReply.replyText,
-          })
-      : await this.buildReply({
-          companyProfile,
-          customerName: customer.name,
-          customerMessage,
-        });
+    const rawReplyText = appointmentReply?.replyText || await this.buildReply({
+      companyProfile,
+      customerName: customer.name,
+      customerMessage,
+    });
     const replyText = formatWhatsappParagraphs(rawReplyText);
 
     await this.botInteractionService.create({

@@ -47,13 +47,26 @@ export class AnthropicService {
     }
 
     const servicesSummary = services
-      .slice(0, 20)
-      .map((service) => `- ${service.name}`)
+      .slice(0, 6)
+      .map((service) => {
+        const duration = service.duration_minutes ? ` | ${service.duration_minutes} min` : ""
+        return `- ${service.name}${duration}`
+      })
       .join("\n");
     const professionalsSummary = professionals
-      .slice(0, 20)
-      .map((professional) => `- ${professional.name}`)
+      .slice(0, 6)
+      .map((professional) => `- ${professional.name}${professional.role ? ` | ${professional.role}` : ""}`)
       .join("\n");
+    const compactPreviousState = previousState
+      ? {
+          phase: previousState.phase || null,
+          serviceId: previousState.serviceId || null,
+          employeeId: previousState.employeeId || null,
+          dateString: previousState.dateString || null,
+          timeString: previousState.timeString || null,
+          periodKey: previousState.periodKey || null,
+        }
+      : null;
 
     const response = await fetch(`${this.baseUrl}/v1/messages`, {
       method: "POST",
@@ -64,27 +77,26 @@ export class AnthropicService {
       },
       body: JSON.stringify({
         model: this.model,
-        max_tokens: 400,
+        max_tokens: 220,
         system:
-          "Você é um interpretador de mensagens de WhatsApp em pt-BR para um sistema de agendamento. " +
-          "Sua tarefa é entender a intenção do cliente mesmo com abreviações, internetês, erros gramaticais, falta de acento, digitação ruim e frases incompletas. " +
-          "Converta a mensagem para uma forma clara sem mudar o significado. " +
-          "Extraia somente o que for provável e não invente dados. " +
-          "Responda apenas com JSON válido, sem markdown, sem comentários e sem texto fora do JSON. " +
+          "Você interpreta mensagens curtas de WhatsApp em pt-BR para um sistema de agendamento. " +
+          "Entenda abreviações, erros de digitação e frases incompletas. " +
+          "Extraia só o que for provável e nunca invente dados. " +
+          "Responda somente com JSON válido, sem markdown. " +
           "Use este schema: " +
           "{\"normalizedMessage\":string,\"intentCategory\":string,\"serviceName\":string|null,\"professionalName\":string|null,\"dateReference\":string|null,\"timeReference\":string|null,\"periodReference\":string|null,\"confidence\":number}. " +
-          "intentCategory deve ser um entre: scheduling, payment, amenities, service_info, professional_info, professional_schedule, restart, no_scheduling, affirmative, negative, out_of_scope, unknown. " +
+          "intentCategory deve ser um entre: scheduling, cancellation, reschedule, appointment_lookup, payment, amenities, service_info, professional_info, professional_schedule, restart, no_scheduling, affirmative, negative, out_of_scope, unknown. " +
           "confidence deve ir de 0 a 1.",
         messages: [
           {
             role: "user",
             content:
               `Contexto da empresa:\n${companyContext}\n\n` +
-              `Serviços conhecidos:\n${servicesSummary || "- nenhum"}\n\n` +
-              `Profissionais conhecidos:\n${professionalsSummary || "- nenhum"}\n\n` +
-              `Estado anterior da conversa:\n${JSON.stringify(previousState || {}, null, 2)}\n\n` +
+              `Serviços relevantes:\n${servicesSummary || "- nenhum"}\n\n` +
+              `Profissionais relevantes:\n${professionalsSummary || "- nenhum"}\n\n` +
+              `Estado anterior:\n${JSON.stringify(compactPreviousState || {}, null, 2)}\n\n` +
               `Nome do cliente: ${customerName || "Cliente"}\n` +
-              `Mensagem original do cliente: ${customerMessage}\n\n` +
+              `Mensagem do cliente: ${customerMessage}\n\n` +
               "Retorne apenas o JSON.",
           },
         ],

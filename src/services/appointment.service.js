@@ -254,6 +254,39 @@ export class AppointmentService {
     return appointments;
   }
 
+  async findOpenAppointmentsByCustomer(companyId, customerId) {
+    return prisma.appointment.findMany({
+      where: {
+        company_id: Number(companyId),
+        client_id: Number(customerId),
+        status: { in: ["PENDING", "CONFIRMED"] },
+      },
+      orderBy: { start_time: "asc" },
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+        employee: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            duration_minutes: true,
+          },
+        },
+      },
+    });
+  }
+
   async create(appointment, options = {}) {
     const {
       company_id,
@@ -477,5 +510,188 @@ export class AppointmentService {
     } catch (error) {
       return false;
     }
+  }
+
+  async cancelAppointment(id, { cancel_reason = "OTHER", observations } = {}, options = {}) {
+    const currentAppointment = await prisma.appointment.findUnique({
+      where: { id: Number(id) },
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+        employee: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            duration_minutes: true,
+          },
+        },
+      },
+    });
+
+    if (!currentAppointment) return null;
+
+    const canceledAppointment = await prisma.appointment.update({
+      where: { id: Number(id) },
+      data: {
+        status: "CANCELED",
+        cancel_reason,
+        ...(observations !== undefined ? { observations } : {}),
+      },
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+        employee: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            duration_minutes: true,
+          },
+        },
+      },
+    });
+
+    this.emitAppointmentEvent("appointment:canceled", canceledAppointment, options);
+
+    return canceledAppointment;
+  }
+
+  async rescheduleAppointment(id, data, options = {}) {
+    const currentAppointment = await prisma.appointment.findUnique({
+      where: { id: Number(id) },
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+        employee: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            duration_minutes: true,
+          },
+        },
+      },
+    });
+
+    if (!currentAppointment) return null;
+
+    const nextServiceId = Number(data.service_id ?? currentAppointment.service_id);
+    const nextEmployeeId = Number(data.employee_id ?? currentAppointment.employee_id);
+    const companyId = Number(data.company_id ?? currentAppointment.company_id);
+
+    const service = await prisma.service.findUnique({
+      where: { id: nextServiceId },
+      select: {
+        id: true,
+        company_id: true,
+        duration_minutes: true,
+      },
+    });
+
+    if (!service) {
+      throw new Error("Serviço não encontrado");
+    }
+
+    if (service.company_id !== companyId) {
+      throw new Error("Serviço não pertence à empresa informada");
+    }
+
+    if (!data.start_time) {
+      throw new Error("Novo horário não informado");
+    }
+
+    const nextStartTime = new Date(data.start_time);
+    const nextEndTime = this.calculateEndTime(nextStartTime, service.duration_minutes);
+
+    this.validateTimeRange(nextStartTime, nextEndTime);
+    await this.validateEmployeeScheduleAvailability({
+      company_id: companyId,
+      employee_id: nextEmployeeId,
+      start_time: nextStartTime,
+      end_time: nextEndTime,
+    });
+
+    const hasOverlap = await this.hasEmployeeOverlap({
+      employee_id: nextEmployeeId,
+      start_time: nextStartTime,
+      end_time: nextEndTime,
+      excludeId: Number(id),
+    });
+
+    if (hasOverlap) {
+      throw new AppointmentConflictError(
+        "Já existe um agendamento para este funcionário no horário informado",
+      );
+    }
+
+    const updatedAppointment = await prisma.appointment.update({
+      where: { id: Number(id) },
+      data: {
+        company_id: companyId,
+        service_id: nextServiceId,
+        employee_id: nextEmployeeId,
+        start_time: nextStartTime,
+        end_time: nextEndTime,
+        status: data.status ?? currentAppointment.status,
+        ...(data.observations !== undefined ? { observations: data.observations } : {}),
+      },
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+        employee: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            duration_minutes: true,
+          },
+        },
+      },
+    });
+
+    this.emitAppointmentEvent("appointment:updated", updatedAppointment, options);
+
+    return updatedAppointment;
   }
 }

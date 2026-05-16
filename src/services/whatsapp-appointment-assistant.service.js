@@ -270,6 +270,58 @@ export class WhatsAppAppointmentAssistantService {
     ].some((term) => normalized.includes(term))
   }
 
+  isCancellationIntent(message = "") {
+    const normalized = normalizeText(message)
+
+    return [
+      "cancelar agendamento",
+      "cancelar horario",
+      "cancelar marcacao",
+      "cancelar minha reserva",
+      "quero cancelar",
+      "preciso cancelar",
+      "desmarcar",
+      "nao vou conseguir ir",
+      "não vou conseguir ir",
+      "nao poderei ir",
+      "não poderei ir",
+    ].some((term) => normalized.includes(normalizeText(term)))
+  }
+
+  isRescheduleIntent(message = "") {
+    const normalized = normalizeText(message)
+
+    return [
+      "reagendar",
+      "remarcar",
+      "mudar horario",
+      "mudar meu horario",
+      "trocar horario",
+      "trocar dia",
+      "alterar agendamento",
+      "alterar horario",
+      "outro horario para meu agendamento",
+    ].some((term) => normalized.includes(normalizeText(term)))
+  }
+
+  isAppointmentLookupIntent(message = "") {
+    const normalized = normalizeText(message)
+
+    return [
+      "meus agendamentos",
+      "meu agendamento",
+      "tenho horario marcado",
+      "tenho agendamento",
+      "quais agendamentos tenho",
+      "quais horarios tenho",
+      "me fala meus horarios",
+      "consultar agendamento",
+      "ver agendamento",
+      "agendamentos pendentes",
+      "agendamentos confirmados",
+    ].some((term) => normalized.includes(normalizeText(term)))
+  }
+
   isAmenitiesIntent(message = "") {
     const normalized = normalizeText(message)
 
@@ -384,6 +436,67 @@ export class WhatsAppAppointmentAssistantService {
     if (index < 0 || index >= optionsLength) return null
 
     return index
+  }
+
+  inferLocalIntent(message = "", previousState = null) {
+    if (!message?.trim()) return "unknown"
+
+    if (previousState?.phase === "awaiting_confirmation") {
+      if (this.isAffirmative(message)) return "affirmative"
+      if (this.isNegative(message)) return "negative"
+    }
+
+    if (this.isRestartIntent(message)) return "restart"
+    if (this.isNoSchedulingIntent(message)) return "no_scheduling"
+    if (this.isCancellationIntent(message)) return "cancellation"
+    if (this.isRescheduleIntent(message)) return "reschedule"
+    if (this.isAppointmentLookupIntent(message)) return "appointment_lookup"
+    if (this.isPaymentIntent(message)) return "payment"
+    if (this.isAmenitiesIntent(message)) return "amenities"
+    if (this.isServiceInfoIntent(message)) return "service_info"
+    if (this.isProfessionalInfoIntent(message)) return "professional_info"
+    if (this.isProfessionalScheduleIntent(message)) return "professional_schedule"
+    if (this.isSchedulingIntent(message)) return "scheduling"
+    if (previousState?.phase && previousState.phase !== "completed") return "conversation_continuation"
+
+    return "unknown"
+  }
+
+  shouldUseInterpretationFallback({
+    companyProfile,
+    customerMessage,
+    latestInteraction,
+  }) {
+    const previousState = this.getConversationState(latestInteraction)
+    const localIntent = this.inferLocalIntent(customerMessage, previousState)
+
+    if (localIntent !== "unknown") {
+      return {
+        shouldUseAi: false,
+        localIntent,
+      }
+    }
+
+    const services = companyProfile?.services || []
+    const professionals = companyProfile?.professionals || []
+    const normalizedMessage = normalizeText(customerMessage)
+    const hasEntitySignals =
+      this.getServiceCandidates(normalizedMessage, services).length > 0 ||
+      this.getProfessionalCandidates(normalizedMessage, professionals).length > 0
+    const hasDateOrTimeSignals = Boolean(
+      this.parseDateFromMessage(normalizedMessage) ||
+      this.parseTimeFromMessage(normalizedMessage) ||
+      this.parsePeriodFromMessage(normalizedMessage),
+    )
+    const hasOptionSelection = this.extractOptionIndex(
+      normalizedMessage,
+      Math.max(previousState?.serviceOptions?.length || 0, previousState?.slotOptions?.length || 0),
+    ) !== null
+
+    return {
+      shouldUseAi: !(hasEntitySignals || hasDateOrTimeSignals || hasOptionSelection),
+      localIntent,
+    }
   }
 
   getConversationState(latestInteraction) {
@@ -524,6 +637,26 @@ export class WhatsAppAppointmentAssistantService {
 
     const bestScore = candidates[0].score
     return candidates.filter((item) => item.score >= Math.max(12, bestScore - 8))
+  }
+
+  getRelevantServices(message = "", services = [], limit = 5) {
+    const candidates = this.getServiceCandidates(message, services)
+
+    if (candidates.length > 0) {
+      return candidates.slice(0, limit).map((item) => item.service)
+    }
+
+    return services.slice(0, limit)
+  }
+
+  getRelevantProfessionals(message = "", professionals = [], limit = 5) {
+    const candidates = this.getProfessionalCandidates(message, professionals)
+
+    if (candidates.length > 0) {
+      return candidates.slice(0, limit).map((item) => item.professional)
+    }
+
+    return professionals.slice(0, limit)
   }
 
   buildProfessionalAliases(professional) {
@@ -1051,6 +1184,91 @@ export class WhatsAppAppointmentAssistantService {
     ].join("\n\n")
   }
 
+  formatOpenAppointmentOption(appointment, index = null) {
+    const prefix = index !== null ? `${index + 1}. ` : ""
+    const statusLabel = appointment.status === "CONFIRMED" ? "confirmado" : "pendente"
+
+    return `${prefix}${appointment.service.name} - ${formatDateLabel(appointment.start_time)} às ${formatTimeLabel(appointment.start_time)} com ${professionalReference(appointment.employee?.name || "")} (${statusLabel})`
+  }
+
+  buildOpenAppointmentsReply(customerName, appointments = []) {
+    if (appointments.length === 0) {
+      return [
+        "No momento, não encontrei agendamentos pendentes ou confirmados no seu número 😊",
+        "Se quiser, posso te ajudar a marcar um novo horário por aqui ✨",
+      ].join("\n\n")
+    }
+
+    return [
+      `Encontrei estes agendamentos no seu número, ${firstName(customerName)} 😊`,
+      appointments
+        .map((appointment, index) => this.formatOpenAppointmentOption(appointment, index))
+        .join("\n"),
+      "Se quiser cancelar ou remarcar algum deles, me diga qual opção você quer.",
+    ].join("\n\n")
+  }
+
+  buildSelectAppointmentToCancelReply(customerName, appointments = []) {
+    return [
+      "Claro! Me diga qual agendamento você quer cancelar 😊",
+      appointments
+        .map((appointment, index) => this.formatOpenAppointmentOption(appointment, index))
+        .join("\n"),
+      "Pode responder com o número da opção.",
+    ].join("\n\n")
+  }
+
+  buildCancelConfirmationReply(customerName, appointment) {
+    return [
+      "Tudo bem.",
+      `Você quer cancelar ${appointment.service.name} do dia ${formatDateLabel(appointment.start_time)} às ${formatTimeLabel(appointment.start_time)} com ${professionalReference(appointment.employee?.name || "")}?`,
+      "Se estiver certo, me responda com 'sim'.",
+    ].join("\n\n")
+  }
+
+  buildCancellationSuccessReply(customerName, appointment) {
+    return [
+      `Prontinho, ${firstName(customerName)}. Seu agendamento foi cancelado.`,
+      `${appointment.service.name} do dia ${formatDateLabel(appointment.start_time)} às ${formatTimeLabel(appointment.start_time)} com ${professionalReference(appointment.employee?.name || "")}.`,
+      "Se quiser, eu posso te ajudar a marcar outro horário por aqui.",
+    ].join("\n\n")
+  }
+
+  buildSelectAppointmentToRescheduleReply(customerName, appointments = []) {
+    return [
+      "Claro! Qual agendamento você quer remarcar? 😊",
+      appointments
+        .map((appointment, index) => this.formatOpenAppointmentOption(appointment, index))
+        .join("\n"),
+      "Pode responder com o número da opção.",
+    ].join("\n\n")
+  }
+
+  buildAskRescheduleDateReply(customerName, appointment) {
+    return [
+      "Perfeito! Vamos remarcar esse atendimento ✨",
+      `Hoje ele está em ${formatDateLabel(appointment.start_time)} às ${formatTimeLabel(appointment.start_time)}.`,
+      "Qual novo dia você prefere?",
+    ].join("\n\n")
+  }
+
+  buildRescheduleConfirmationReply(customerName, slot, previousAppointment) {
+    return [
+      "Perfeito! Encontrei uma nova opção para você ✨",
+      `Saindo de ${formatDateLabel(previousAppointment.start_time)} às ${formatTimeLabel(previousAppointment.start_time)} e indo para ${formatDateLabel(slot.startTime)} às ${formatTimeLabel(slot.startTime)} com ${professionalReference(slot.employeeName)}.`,
+      "Se estiver tudo certo, me responda com 'sim' e eu faço a remarcação 💛",
+    ].join("\n\n")
+  }
+
+  buildRescheduleSuccessReply(customerName, appointment, previousAppointment) {
+    return [
+      `Prontinho, ${firstName(customerName)}! Seu agendamento foi remarcado 💖`,
+      `Antes: ${formatDateLabel(previousAppointment.start_time)} às ${formatTimeLabel(previousAppointment.start_time)}.`,
+      `Novo horário: ${appointment.service.name} no dia ${formatDateLabel(appointment.start_time)} às ${formatTimeLabel(appointment.start_time)} com ${professionalReference(appointment.employee?.name || "")}.`,
+      "Se precisar ajustar de novo, é só me chamar por aqui.",
+    ].join("\n\n")
+  }
+
   buildProfessionalUnavailableForServiceReply(customerName, service, professional, availableProfessionals = []) {
     const options = availableProfessionals
       .slice(0, 4)
@@ -1262,7 +1480,14 @@ export class WhatsAppAppointmentAssistantService {
       slotOptions: overrides.slotOptions || [],
       serviceOptions: overrides.serviceOptions || [],
       selectedSlot: overrides.selectedSlot || null,
+      appointmentOptions: overrides.appointmentOptions || [],
+      targetAppointment: overrides.targetAppointment || null,
+      rescheduleAppointmentId: overrides.rescheduleAppointmentId || null,
     }
+  }
+
+  async getOpenAppointmentsForCustomer(companyId, customerId) {
+    return this.appointmentService.findOpenAppointmentsByCustomer(companyId, customerId)
   }
 
   async confirmAppointment({ company, customer, state }) {
@@ -1281,6 +1506,36 @@ export class WhatsAppAppointmentAssistantService {
     })
 
     return appointment
+  }
+
+  async cancelAppointment({ state }) {
+    if (!state?.targetAppointment?.id) {
+      throw new Error("Nao encontrei o agendamento que deveria ser cancelado.")
+    }
+
+    return this.appointmentService.cancelAppointment(
+      state.targetAppointment.id,
+      {
+        cancel_reason: "OTHER",
+        observations: "Agendamento cancelado via conversa no WhatsApp",
+      },
+    )
+  }
+
+  async rescheduleAppointment({ state }) {
+    if (!state?.rescheduleAppointmentId || !state?.selectedSlot?.startTime || !state?.selectedSlot?.employeeId) {
+      throw new Error("Nao encontrei os dados necessarios para remarcar esse agendamento.")
+    }
+
+    return this.appointmentService.rescheduleAppointment(
+      state.rescheduleAppointmentId,
+      {
+        start_time: state.selectedSlot.startTime,
+        employee_id: state.selectedSlot.employeeId,
+        service_id: state.selectedSlot.serviceId,
+        observations: "Agendamento remarcado via conversa no WhatsApp",
+      },
+    )
   }
 
   async handleMessage({
@@ -1339,6 +1594,91 @@ export class WhatsAppAppointmentAssistantService {
       : null
     const selectedProfessionalFromMessage = interpretedProfessional || explicitProfessionalFromMessage || currentProfessional
     const selectedServiceFromMessage = interpretedService || explicitServiceFromMessage || currentService
+    const openAppointments = await this.getOpenAppointmentsForCustomer(company.id, customer.id)
+
+    if (previousState?.phase === "awaiting_cancel_selection") {
+      const appointmentOptionIndex = this.extractOptionIndex(messageText, previousState?.appointmentOptions?.length || 0)
+      const selectedAppointment = appointmentOptionIndex !== null
+        ? previousState?.appointmentOptions?.[appointmentOptionIndex]
+        : null
+
+      if (selectedAppointment) {
+        return this.buildStructuredReply(
+          "cancel_confirmation",
+          { appointment: selectedAppointment },
+          {
+            fallbackText: this.buildCancelConfirmationReply(customer.name, selectedAppointment),
+            interactionType: "CANCELLATION",
+            interactionStatus: "IN_PROGRESS",
+            conversationState: this.buildStatePayload({
+              phase: "awaiting_cancel_confirmation",
+              targetAppointment: selectedAppointment,
+            }),
+          },
+        )
+      }
+    }
+
+    if (previousState?.phase === "awaiting_cancel_confirmation") {
+      if (interpretedIntent === "affirmative" || this.isAffirmative(messageText)) {
+        const canceledAppointment = await this.cancelAppointment({ state: previousState })
+
+        return this.buildStructuredReply(
+          "appointment_canceled",
+          { appointment: canceledAppointment },
+          {
+            fallbackText: this.buildCancellationSuccessReply(customer.name, canceledAppointment),
+            interactionType: "CANCELLATION",
+            interactionStatus: "CANCELED",
+            conversationState: this.buildStatePayload({ phase: "completed" }),
+            additionalInteractionData: {
+              appointmentId: canceledAppointment.id,
+              appointmentStatus: canceledAppointment.status,
+            },
+          },
+        )
+      }
+
+      if (interpretedIntent === "negative" || this.isNegative(messageText)) {
+        return this.buildStructuredReply(
+          "cancellation_aborted",
+          {},
+          {
+            fallbackText: "Tudo bem 😊 Mantive seu agendamento como está.",
+            interactionType: "CANCELLATION",
+            interactionStatus: "IN_PROGRESS",
+            conversationState: this.buildStatePayload({ phase: "idle" }),
+          },
+        )
+      }
+    }
+
+    if (previousState?.phase === "awaiting_reschedule_selection") {
+      const appointmentOptionIndex = this.extractOptionIndex(messageText, previousState?.appointmentOptions?.length || 0)
+      const selectedAppointment = appointmentOptionIndex !== null
+        ? previousState?.appointmentOptions?.[appointmentOptionIndex]
+        : null
+
+      if (selectedAppointment) {
+        return this.buildStructuredReply(
+          "ask_reschedule_date",
+          { appointment: selectedAppointment },
+          {
+            fallbackText: this.buildAskRescheduleDateReply(customer.name, selectedAppointment),
+            interactionType: "REAPPOINTMENT",
+            interactionStatus: "IN_PROGRESS",
+            conversationState: this.buildStatePayload({
+              phase: "awaiting_date",
+              serviceId: selectedAppointment.service_id,
+              employeeId: selectedAppointment.employee_id,
+              employeeName: selectedAppointment.employee?.name || null,
+              rescheduleAppointmentId: selectedAppointment.id,
+              targetAppointment: selectedAppointment,
+            }),
+          },
+        )
+      }
+    }
 
     if (selectedProfessionalFromMessage && !selectedServiceFromMessage && schedulingIntent) {
       const professionalServices = await this.getServicesForProfessional(company.id, selectedProfessionalFromMessage.id)
@@ -1418,6 +1758,113 @@ export class WhatsAppAppointmentAssistantService {
           interactionType: "INQUIRY",
           interactionStatus: "IN_PROGRESS",
           conversationState: previousState || this.buildStatePayload({ phase: "idle" }),
+        },
+      )
+    }
+
+    if (interpretedIntent === "appointment_lookup" || this.isAppointmentLookupIntent(messageText)) {
+      return this.buildStructuredReply(
+        "open_appointments",
+        { appointments: openAppointments },
+        {
+          fallbackText: this.buildOpenAppointmentsReply(customer.name, openAppointments),
+          interactionType: "INQUIRY",
+          interactionStatus: "IN_PROGRESS",
+          conversationState: this.buildStatePayload({ phase: "idle" }),
+        },
+      )
+    }
+
+    if (interpretedIntent === "cancellation" || this.isCancellationIntent(messageText)) {
+      if (openAppointments.length === 0) {
+        return this.buildStructuredReply(
+          "no_open_appointments",
+          {},
+          {
+            fallbackText: this.buildOpenAppointmentsReply(customer.name, openAppointments),
+            interactionType: "CANCELLATION",
+            interactionStatus: "IN_PROGRESS",
+            conversationState: this.buildStatePayload({ phase: "idle" }),
+          },
+        )
+      }
+
+      if (openAppointments.length === 1) {
+        return this.buildStructuredReply(
+          "cancel_confirmation",
+          { appointment: openAppointments[0] },
+          {
+            fallbackText: this.buildCancelConfirmationReply(customer.name, openAppointments[0]),
+            interactionType: "CANCELLATION",
+            interactionStatus: "IN_PROGRESS",
+            conversationState: this.buildStatePayload({
+              phase: "awaiting_cancel_confirmation",
+              targetAppointment: openAppointments[0],
+            }),
+          },
+        )
+      }
+
+      return this.buildStructuredReply(
+        "select_appointment_to_cancel",
+        { appointments: openAppointments },
+        {
+          fallbackText: this.buildSelectAppointmentToCancelReply(customer.name, openAppointments),
+          interactionType: "CANCELLATION",
+          interactionStatus: "IN_PROGRESS",
+          conversationState: this.buildStatePayload({
+            phase: "awaiting_cancel_selection",
+            appointmentOptions: openAppointments,
+          }),
+        },
+      )
+    }
+
+    if (interpretedIntent === "reschedule" || this.isRescheduleIntent(messageText)) {
+      if (openAppointments.length === 0) {
+        return this.buildStructuredReply(
+          "no_open_appointments",
+          {},
+          {
+            fallbackText: this.buildOpenAppointmentsReply(customer.name, openAppointments),
+            interactionType: "REAPPOINTMENT",
+            interactionStatus: "IN_PROGRESS",
+            conversationState: this.buildStatePayload({ phase: "idle" }),
+          },
+        )
+      }
+
+      if (openAppointments.length === 1) {
+        return this.buildStructuredReply(
+          "ask_reschedule_date",
+          { appointment: openAppointments[0] },
+          {
+            fallbackText: this.buildAskRescheduleDateReply(customer.name, openAppointments[0]),
+            interactionType: "REAPPOINTMENT",
+            interactionStatus: "IN_PROGRESS",
+            conversationState: this.buildStatePayload({
+              phase: "awaiting_date",
+              serviceId: openAppointments[0].service_id,
+              employeeId: openAppointments[0].employee_id,
+              employeeName: openAppointments[0].employee?.name || null,
+              rescheduleAppointmentId: openAppointments[0].id,
+              targetAppointment: openAppointments[0],
+            }),
+          },
+        )
+      }
+
+      return this.buildStructuredReply(
+        "select_appointment_to_reschedule",
+        { appointments: openAppointments },
+        {
+          fallbackText: this.buildSelectAppointmentToRescheduleReply(customer.name, openAppointments),
+          interactionType: "REAPPOINTMENT",
+          interactionStatus: "IN_PROGRESS",
+          conversationState: this.buildStatePayload({
+            phase: "awaiting_reschedule_selection",
+            appointmentOptions: openAppointments,
+          }),
         },
       )
     }
@@ -1600,6 +2047,36 @@ export class WhatsAppAppointmentAssistantService {
     if (previousState?.phase === "awaiting_confirmation") {
       if (interpretedIntent === "affirmative" || this.isAffirmative(messageText)) {
         try {
+          if (previousState?.rescheduleAppointmentId) {
+            const updatedAppointment = await this.rescheduleAppointment({
+              state: previousState,
+            })
+
+            return this.buildStructuredReply(
+              "appointment_rescheduled",
+              {
+                appointment: updatedAppointment,
+                previousAppointment: previousState.targetAppointment,
+              },
+              {
+                fallbackText: this.buildRescheduleSuccessReply(
+                  customer.name,
+                  updatedAppointment,
+                  previousState.targetAppointment,
+                ),
+                interactionType: "REAPPOINTMENT",
+                interactionStatus: "SCHEDULED",
+                conversationState: this.buildStatePayload({ phase: "completed" }),
+                additionalInteractionData: {
+                  appointmentId: updatedAppointment.id,
+                  appointmentStartTime: updatedAppointment.start_time,
+                  appointmentStatus: updatedAppointment.status,
+                  previousAppointmentId: previousState.targetAppointment?.id || null,
+                },
+              },
+            )
+          }
+
           const createdAppointment = await this.confirmAppointment({
             company,
             customer,
@@ -1650,13 +2127,15 @@ export class WhatsAppAppointmentAssistantService {
                   },
                   slots,
                 ),
-                interactionType: "APPOINTMENT",
+                interactionType: previousState?.rescheduleAppointmentId ? "REAPPOINTMENT" : "APPOINTMENT",
                 interactionStatus: "IN_PROGRESS",
                 conversationState: this.buildStatePayload({
                   phase: "awaiting_time",
                   serviceId: previousState.selectedSlot.serviceId,
                   dateString: previousState.dateString,
                   slotOptions: slots,
+                  rescheduleAppointmentId: previousState?.rescheduleAppointmentId || null,
+                  targetAppointment: previousState?.targetAppointment || null,
                 }),
               },
             )
@@ -1671,12 +2150,19 @@ export class WhatsAppAppointmentAssistantService {
           "restart_appointment",
           { services: serviceOptions.slice(0, 5) },
           {
-            fallbackText: this.buildRestartReply(customer.name),
-            interactionType: "APPOINTMENT",
+            fallbackText: previousState?.rescheduleAppointmentId
+              ? "Sem problema 😊 Podemos tentar outro horário. Me diga outra data ou horário que eu verifico para você."
+              : this.buildRestartReply(customer.name),
+            interactionType: previousState?.rescheduleAppointmentId ? "REAPPOINTMENT" : "APPOINTMENT",
             interactionStatus: "IN_PROGRESS",
             conversationState: this.buildStatePayload({
-              phase: "awaiting_service",
-              serviceOptions: serviceOptions.slice(0, 5),
+              phase: previousState?.rescheduleAppointmentId ? "awaiting_date" : "awaiting_service",
+              serviceOptions: previousState?.rescheduleAppointmentId ? [] : serviceOptions.slice(0, 5),
+              serviceId: previousState?.serviceId || null,
+              employeeId: previousState?.employeeId || null,
+              employeeName: previousState?.employeeName || null,
+              rescheduleAppointmentId: previousState?.rescheduleAppointmentId || null,
+              targetAppointment: previousState?.targetAppointment || null,
             }),
           },
         )
@@ -1799,7 +2285,7 @@ export class WhatsAppAppointmentAssistantService {
           fallbackText: selectedProfessional
             ? this.buildAskDateWithProfessionalReply(customer.name, selectedService, selectedProfessional)
             : this.buildAskDateReply(customer.name, selectedService),
-          interactionType: "APPOINTMENT",
+          interactionType: previousState?.rescheduleAppointmentId ? "REAPPOINTMENT" : "APPOINTMENT",
           interactionStatus: "IN_PROGRESS",
           conversationState: this.buildStatePayload({
             phase: "awaiting_date",
@@ -1808,6 +2294,8 @@ export class WhatsAppAppointmentAssistantService {
             employeeName: selectedProfessional?.name || null,
             periodKey: requestedPeriod?.key || null,
             periodLabel: requestedPeriod?.label || null,
+            rescheduleAppointmentId: previousState?.rescheduleAppointmentId || null,
+            targetAppointment: previousState?.targetAppointment || null,
           }),
         },
       )
@@ -1821,8 +2309,10 @@ export class WhatsAppAppointmentAssistantService {
         "ask_confirmation",
         { slot: selectedSlot },
         {
-          fallbackText: this.buildConfirmationReply(customer.name, selectedSlot),
-          interactionType: "APPOINTMENT",
+          fallbackText: previousState?.rescheduleAppointmentId
+            ? this.buildRescheduleConfirmationReply(customer.name, selectedSlot, previousState.targetAppointment)
+            : this.buildConfirmationReply(customer.name, selectedSlot),
+          interactionType: previousState?.rescheduleAppointmentId ? "REAPPOINTMENT" : "APPOINTMENT",
           interactionStatus: "IN_PROGRESS",
           conversationState: this.buildStatePayload({
             phase: "awaiting_confirmation",
@@ -1834,6 +2324,8 @@ export class WhatsAppAppointmentAssistantService {
             periodKey: requestedPeriod?.key || null,
             periodLabel: requestedPeriod?.label || null,
             selectedSlot,
+            rescheduleAppointmentId: previousState?.rescheduleAppointmentId || null,
+            targetAppointment: previousState?.targetAppointment || null,
           }),
         },
       )
@@ -1871,7 +2363,7 @@ export class WhatsAppAppointmentAssistantService {
           },
           {
             fallbackText: this.buildNoAvailabilityReply(customer.name, selectedService, nextSlots),
-            interactionType: "APPOINTMENT",
+            interactionType: previousState?.rescheduleAppointmentId ? "REAPPOINTMENT" : "APPOINTMENT",
             interactionStatus: "IN_PROGRESS",
             conversationState: this.buildStatePayload({
               phase: "awaiting_time",
@@ -1882,6 +2374,8 @@ export class WhatsAppAppointmentAssistantService {
               periodKey: requestedPeriod?.key || null,
               periodLabel: requestedPeriod?.label || null,
               slotOptions: nextSlots,
+              rescheduleAppointmentId: previousState?.rescheduleAppointmentId || null,
+              targetAppointment: previousState?.targetAppointment || null,
             }),
           },
         )
@@ -1898,7 +2392,7 @@ export class WhatsAppAppointmentAssistantService {
         },
         {
           fallbackText: this.buildAskTimeReply(customer.name, selectedService, selectedDate, suggestedSlots, selectedProfessional),
-          interactionType: "APPOINTMENT",
+          interactionType: previousState?.rescheduleAppointmentId ? "REAPPOINTMENT" : "APPOINTMENT",
           interactionStatus: "IN_PROGRESS",
           conversationState: this.buildStatePayload({
             phase: "awaiting_time",
@@ -1909,6 +2403,8 @@ export class WhatsAppAppointmentAssistantService {
             periodKey: requestedPeriod?.key || null,
             periodLabel: requestedPeriod?.label || null,
             slotOptions: suggestedSlots,
+            rescheduleAppointmentId: previousState?.rescheduleAppointmentId || null,
+            targetAppointment: previousState?.targetAppointment || null,
           }),
         },
       )
@@ -1936,7 +2432,7 @@ export class WhatsAppAppointmentAssistantService {
           },
           {
             fallbackText: this.buildRequestedTimeUnavailableReply(customer.name, selectedService, selectedTime, nearestSlots),
-            interactionType: "APPOINTMENT",
+            interactionType: previousState?.rescheduleAppointmentId ? "REAPPOINTMENT" : "APPOINTMENT",
             interactionStatus: "IN_PROGRESS",
             conversationState: this.buildStatePayload({
               phase: "awaiting_time",
@@ -1945,6 +2441,8 @@ export class WhatsAppAppointmentAssistantService {
               periodKey: requestedPeriod?.key || null,
               periodLabel: requestedPeriod?.label || null,
               slotOptions: nearestSlots,
+              rescheduleAppointmentId: previousState?.rescheduleAppointmentId || null,
+              targetAppointment: previousState?.targetAppointment || null,
             }),
           },
         )
@@ -1966,7 +2464,7 @@ export class WhatsAppAppointmentAssistantService {
         },
         {
           fallbackText: this.buildNoAvailabilityReply(customer.name, selectedService, nextSlots),
-          interactionType: "APPOINTMENT",
+          interactionType: previousState?.rescheduleAppointmentId ? "REAPPOINTMENT" : "APPOINTMENT",
           interactionStatus: "IN_PROGRESS",
           conversationState: this.buildStatePayload({
             phase: "awaiting_time",
@@ -1977,6 +2475,8 @@ export class WhatsAppAppointmentAssistantService {
             periodKey: requestedPeriod?.key || null,
             periodLabel: requestedPeriod?.label || null,
             slotOptions: nextSlots,
+            rescheduleAppointmentId: previousState?.rescheduleAppointmentId || null,
+            targetAppointment: previousState?.targetAppointment || null,
           }),
         },
       )
@@ -1986,8 +2486,10 @@ export class WhatsAppAppointmentAssistantService {
       "ask_confirmation",
       { slot: exactSlot },
       {
-        fallbackText: this.buildConfirmationReply(customer.name, exactSlot),
-        interactionType: "APPOINTMENT",
+        fallbackText: previousState?.rescheduleAppointmentId
+          ? this.buildRescheduleConfirmationReply(customer.name, exactSlot, previousState.targetAppointment)
+          : this.buildConfirmationReply(customer.name, exactSlot),
+        interactionType: previousState?.rescheduleAppointmentId ? "REAPPOINTMENT" : "APPOINTMENT",
         interactionStatus: "IN_PROGRESS",
         conversationState: this.buildStatePayload({
           phase: "awaiting_confirmation",
@@ -1999,6 +2501,8 @@ export class WhatsAppAppointmentAssistantService {
           periodKey: requestedPeriod?.key || null,
           periodLabel: requestedPeriod?.label || null,
           selectedSlot: exactSlot,
+          rescheduleAppointmentId: previousState?.rescheduleAppointmentId || null,
+          targetAppointment: previousState?.targetAppointment || null,
         }),
       },
     )

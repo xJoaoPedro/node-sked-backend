@@ -5,11 +5,13 @@ import jwt from "jsonwebtoken";
 import { EvolutionService } from "./evolution.service.js";
 import socketServer from "../socket.js";
 
-const { PrismaClient } = pkg 
+const { PrismaClient, Prisma } = pkg 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 const socket = socketServer;
 const evolutionService = new EvolutionService();
+
+export class CompanyConflictError extends Error {}
 
 function normalizeDigits(value = "") {
   return String(value).replace(/\D/g, "");
@@ -656,16 +658,39 @@ export class CompanyService {
       low_stock_threshold,
       plan, status, approve_date,
     } = company;
+
+    const existingCompanyWithPhone = await prisma.company.findFirst({
+      where: { phone },
+      select: { id: true },
+    });
+
+    if (existingCompanyWithPhone) {
+      throw new CompanyConflictError("Este telefone já está sendo usado");
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const createdCompany = await prisma.company.create({
-      data: {
-        legal_name, fantasy_name, cnpj, email,
-        password: hashedPassword, phone, photo, website, accepted_payment_methods, amenities,
-        low_stock_threshold,
-        plan, status, approve_date,
-      },
-    });
+    let createdCompany;
+
+    try {
+      createdCompany = await prisma.company.create({
+        data: {
+          legal_name, fantasy_name, cnpj, email,
+          password: hashedPassword, phone, photo, website, accepted_payment_methods, amenities,
+          low_stock_threshold,
+          plan, status, approve_date,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new CompanyConflictError("Este telefone já está sendo usado");
+      }
+
+      throw error;
+    }
 
     try {
       await this.ensureEvolutionInstanceForCompany(createdCompany);
@@ -726,6 +751,20 @@ export class CompanyService {
       const nextPhone = data.phone ?? currentCompany.phone ?? "";
       const shouldResetEvolutionConnection = hasPhoneChanged(currentCompany.phone, nextPhone);
 
+      if (data.phone && data.phone !== currentCompany.phone) {
+        const existingCompanyWithPhone = await prisma.company.findFirst({
+          where: {
+            phone: data.phone,
+            id: { not: id },
+          },
+          select: { id: true },
+        });
+
+        if (existingCompanyWithPhone) {
+          throw new CompanyConflictError("Este telefone já está sendo usado");
+        }
+      }
+
       let updatedCompany = await prisma.company.update({
         where: { id },
         data,
@@ -744,6 +783,10 @@ export class CompanyService {
         phoneChanged: shouldResetEvolutionConnection,
       };
     } catch (error) {
+      if (error instanceof CompanyConflictError) {
+        throw error;
+      }
+
       return false;
     }
   }

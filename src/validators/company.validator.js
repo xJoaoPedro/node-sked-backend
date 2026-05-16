@@ -15,13 +15,18 @@ const amenitiesSchema = z.array(
   ]),
 ).optional();
 
+const companyLoginSchema = z.object({
+  email: z.email().max(255),
+  password: z.string().min(6).max(30),
+});
+
 const companySchema = z.object({
-  legal_name:    z.string().max(255).optional(),
-  fantasy_name:  z.string().max(255).optional(),
-  cnpj:          z.string().max(14).optional(),
+  legal_name:    z.string().trim().min(1).max(255),
+  fantasy_name:  z.string().trim().min(1).max(255),
+  cnpj:          z.string().length(14),
   email:         z.email().max(255),
   password:      z.string().min(6).max(30),
-  phone:         z.string().max(11).optional(),
+  phone:         z.string().min(10).max(11),
   photo:         z.string().max(255).nullable().optional(),
   website:       z.url().max(255).nullable().optional(),
   accepted_payment_methods: paymentMethodsSchema,
@@ -52,3 +57,4 @@ const normalizeCompanyPayload = (schema) => schema.transform((data) => {
 
 export const createCompanyValidator = normalizeCompanyPayload(companySchema);
 export const updateCompanyValidator = normalizeCompanyPayload(companySchema.partial());
+export const loginCompanyValidator = companyLoginSchema;

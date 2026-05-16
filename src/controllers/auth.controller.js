@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
-import { createCompanyValidator } from "../validators/company.validator.js";
-import { createUserValidator } from "../validators/user.validator.js";
-import { CompanyService } from "../services/company.service.js";
+import { createCompanyValidator, loginCompanyValidator } from "../validators/company.validator.js";
+import { createUserValidator, loginUserValidator } from "../validators/user.validator.js";
+import { CompanyConflictError, CompanyService } from "../services/company.service.js";
 import { UserService } from "../services/user.service.js";
 
 const companyService = new CompanyService();
@@ -11,11 +11,17 @@ function parse(body, res, type) {
   let parsed = null;
 
   switch (type) {
-    case "user":
+    case "user-register":
       parsed = createUserValidator.safeParse(body);
       break;
-    case "company":
+    case "user-login":
+      parsed = loginUserValidator.safeParse(body);
+      break;
+    case "company-register":
       parsed = createCompanyValidator.safeParse(body);
+      break;
+    case "company-login":
+      parsed = loginCompanyValidator.safeParse(body);
       break;
   }
 
@@ -33,7 +39,7 @@ function parse(body, res, type) {
 
 export default class AuthController {
   async userRegister(req, res) {
-    if (!parse(req.body, res, "user")) return;
+    if (!parse(req.body, res, "user-register")) return;
 
     await userService.create(req.body);
 
@@ -41,15 +47,25 @@ export default class AuthController {
   }
 
   async companyRegister(req, res) {
-    if (!parse(req.body, res, "company")) return;
+    if (!parse(req.body, res, "company-register")) return;
 
-    await companyService.create(req.body);
+    try {
+      await companyService.create(req.body);
+    } catch (error) {
+      if (error instanceof CompanyConflictError) {
+        return res.status(409).json({
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
 
     res.status(204).json();
   }
 
   async userLogin(req, res) {
-    if (!parse(req.body, res, "user")) return;
+    if (!parse(req.body, res, "user-login")) return;
 
     const data = await userService.login(req.body, res);
     if (!data) return;
@@ -58,7 +74,7 @@ export default class AuthController {
   }
 
   async companyLogin(req, res) {
-    if (!parse(req.body, res, "company")) return;
+    if (!parse(req.body, res, "company-login")) return;
 
     const data = await companyService.login(req.body, res);
     if (!data) return;
