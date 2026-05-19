@@ -1,4 +1,8 @@
-import { CompanyService } from "../services/company.service.js";
+import {
+  CompanyService,
+  RevenueTransactionConflictError,
+} from "../services/company.service.js";
+import { createRevenueTransactionValidator } from "../validators/revenue-transaction.validator.js";
 import {
   createCompanyValidator,
   updateCompanyValidator,
@@ -202,6 +206,66 @@ export default class CompanyController {
     res.status(200).json({
       message: "Receitas encontradas com sucesso!",
       data: revenues,
+    });
+  }
+
+  async createRevenueTransaction(req, res) {
+    const id = Number(req.params.id);
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const parsed = createRevenueTransactionValidator.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: "Dados inválidos",
+        errors: parsed.error.format(),
+      });
+    }
+
+    try {
+      const revenueTransaction = await service.createRevenueTransaction(id, parsed.data);
+
+      return res.status(201).json({
+        message: "Receita registrada com sucesso!",
+        data: revenueTransaction,
+      });
+    } catch (error) {
+      if (error instanceof RevenueTransactionConflictError) {
+        return res.status(409).json({
+          message: error.message,
+        });
+      }
+
+      if (error instanceof Error) {
+        return res.status(400).json({
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  async getRevenueAppointmentOptions(req, res) {
+    const id = Number(req.params.id);
+    const { limit = 100 } = req.query;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const revenueAppointmentOptions = await service.getRevenueAppointmentOptions(id, limit);
+
+    return res.status(200).json({
+      message: "Agendamentos financeiros encontrados com sucesso!",
+      data: revenueAppointmentOptions,
     });
   }
 

@@ -79,8 +79,10 @@ export default class AppointmentController {
       });
     }
 
+    let createdAppointment;
+
     try {
-      await service.create(req.body, getRealtimeOptions(req));
+      createdAppointment = await service.create(req.body, getRealtimeOptions(req));
     } catch (error) {
       if (error instanceof AppointmentConflictError) {
         return res.status(409).json({
@@ -97,7 +99,10 @@ export default class AppointmentController {
       throw error;
     }
 
-    res.status(204).json();
+    res.status(201).json({
+      message: "Agendamento criado com sucesso!",
+      data: createdAppointment,
+    });
   }
 
   async update(req, res) {
@@ -130,7 +135,11 @@ export default class AppointmentController {
       throw error;
     }
 
-    if (update) return res.status(204).json();
+    if (update)
+      return res.status(200).json({
+        message: "Agendamento atualizado com sucesso!",
+        data: update,
+      });
     else
       return res.status(404).json({
         message: "Agendamento não encontrado",

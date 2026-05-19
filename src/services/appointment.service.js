@@ -369,6 +369,7 @@ export class AppointmentService {
           select: {
             id: true,
             name: true,
+            price: true,
           },
         },
       },
@@ -458,10 +459,17 @@ export class AppointmentService {
               name: true,
             },
           },
+          employee: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
           service: {
             select: {
               id: true,
               name: true,
+              price: true,
             },
           },
         },
@@ -474,7 +482,7 @@ export class AppointmentService {
 
       this.emitAppointmentEvent(eventName, updatedAppointment, options);
 
-      return true;
+      return updatedAppointment;
     } catch (error) {
       if (error instanceof AppointmentConflictError) {
         throw error;

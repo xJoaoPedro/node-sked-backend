@@ -37,6 +37,12 @@ companiesRouter.get('/:id/revenue', controller.getRevenues);
 // GET /:id/revenue/summary (todas as infos sobre receita com intervalo de tempo)
 companiesRouter.get('/:id/revenue/summary', controller.getInitialRevenues);
 
+// GET /:id/revenue/appointments
+companiesRouter.get('/:id/revenue/appointments', controller.getRevenueAppointmentOptions);
+
+// POST /:id/revenue/transactions
+companiesRouter.post('/:id/revenue/transactions', controller.createRevenueTransaction);
+
 // TODO DOCUMENTAR ESSA BOMBA
 // GET /:id/services (todos os servicos de uma empresa)
 companiesRouter.get('/:id/services', controller.getServices);

@@ -12,6 +12,7 @@ const socket = socketServer;
 const evolutionService = new EvolutionService();
 
 export class CompanyConflictError extends Error {}
+export class RevenueTransactionConflictError extends Error {}
 
 function normalizeDigits(value = "") {
   return String(value).replace(/\D/g, "");
@@ -79,6 +80,46 @@ function hasPhoneChanged(previousPhone = "", nextPhone = "") {
   if (!previousDigits || !nextDigits) return previousDigits !== nextDigits;
 
   return comparePhoneVariants(previousDigits, nextDigits) === false;
+}
+
+function mapRevenueStatusToPaymentStatus(status) {
+  if (status === "RECEIVED") return "COMPLETED";
+  if (status === "CANCELED") return "CANCELED";
+  return "PENDING";
+}
+
+function getAppointmentStatusLabel(status) {
+  if (status === "COMPLETED") return "Concluido";
+  if (status === "CONFIRMED") return "Confirmado";
+  if (status === "CANCELED") return "Cancelado";
+  if (status === "NO_SHOW") return "Nao compareceu";
+  return "Pendente";
+}
+
+function getPaymentMethodLabel(method) {
+  if (method === "PIX") return "Pix";
+  if (method === "CREDIT") return "Credito";
+  if (method === "DEBIT") return "Debito";
+  if (method === "CASH") return "Dinheiro";
+  return method;
+}
+
+function getAvailablePaymentMethods(acceptedMethods = []) {
+  const fallbackMethods = ["PIX", "CREDIT", "DEBIT", "CASH"];
+  const methods = acceptedMethods.length ? acceptedMethods : fallbackMethods;
+
+  return methods.map((value) => ({
+    value,
+    label: getPaymentMethodLabel(value),
+  }));
+}
+
+function getRevenueValue(value) {
+  return Number(value || 0);
+}
+
+function roundCurrency(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 }
 
 function slugify(value = "") {
@@ -1504,52 +1545,332 @@ export class CompanyService {
     };
   }
 
-  async getRevenues(id, page = 1, limit = 50, time = 'month') {
-    page = Number(page);
-    const now = new Date();
-    const startDate = this.getPeriodStartDate(time, now);
-
-    const where = {
-      company_id: id,
-      status: { in: ["COMPLETED", "PENDING"] },
-      payment_method: { not: null },
-      start_time: {
-        gte: startDate,
-        lte: now,
-      },
+  normalizeTransactionRevenueEntry(transaction) {
+    return {
+      id: String(transaction.id),
+      date: transaction.occurred_at.toISOString(),
+      clientName: transaction.client?.name || "-",
+      serviceName:
+        transaction.service?.name ||
+        transaction.description ||
+        (transaction.origin === "MANUAL" ? "Lançamento manual" : "Receita vinculada"),
+      professionalName: transaction.employee?.name || "-",
+      paymentMethod: transaction.payment_method,
+      value: getRevenueValue(transaction.amount),
+      status: mapRevenueStatusToPaymentStatus(transaction.status),
+      description: transaction.description || "",
+      appointmentId: transaction.appointment_id ?? null,
     };
+  }
 
-    const [payments, total] = await Promise.all([
+  normalizeAppointmentRevenueEntry(appointment) {
+    return {
+      id: String(appointment.id),
+      date: appointment.start_time.toISOString(),
+      clientName: appointment.client?.name || "-",
+      serviceName: appointment.service?.name || "-",
+      professionalName: appointment.employee?.name || "-",
+      paymentMethod: appointment.payment_method,
+      value: getRevenueValue(appointment.service?.price),
+      status: appointment.status === "COMPLETED" ? "COMPLETED" : "PENDING",
+      description: "",
+      appointmentId: appointment.id,
+    };
+  }
+
+  async getAppointmentRevenueSummary(appointmentId, tx = prisma) {
+    const aggregate = await tx.revenueTransaction.aggregate({
+      where: {
+        appointment_id: Number(appointmentId),
+        status: { not: "CANCELED" },
+      },
+      _sum: {
+        amount: true,
+      },
+    });
+
+    return roundCurrency(aggregate._sum.amount || 0);
+  }
+
+  async getRevenueAppointmentOptions(companyId, limit = 100) {
+    const [company, appointments] = await Promise.all([
+      prisma.company.findUnique({
+        where: { id: Number(companyId) },
+        select: { accepted_payment_methods: true },
+      }),
       prisma.appointment.findMany({
-        where,
-        orderBy: { id: "asc" },
-        skip: (page - 1) * Number(limit),
+        where: {
+          company_id: Number(companyId),
+          status: { in: ["PENDING", "CONFIRMED", "COMPLETED"] },
+        },
+        orderBy: { start_time: "desc" },
         take: Number(limit),
         include: {
-          client: true,
-          service: true,
-          employee: true,
+          client: {
+            select: { id: true, name: true },
+          },
+          employee: {
+            select: { id: true, name: true },
+          },
+          service: {
+            select: { id: true, name: true, price: true },
+          },
         },
       }),
-
-      prisma.appointment.count({ where }),
     ]);
+
+    const summaries = await Promise.all(
+      appointments.map(async (appointment) => {
+        const paidAmount = await this.getAppointmentRevenueSummary(appointment.id);
+        const serviceAmount = roundCurrency(appointment.service?.price || 0);
+        const remainingAmount = roundCurrency(Math.max(serviceAmount - paidAmount, 0));
+
+        return {
+          appointmentId: appointment.id,
+          date: appointment.start_time.toISOString(),
+          clientId: appointment.client?.id ?? null,
+          clientName: appointment.client?.name ?? "-",
+          employeeId: appointment.employee?.id ?? null,
+          professionalName: appointment.employee?.name ?? "-",
+          serviceId: appointment.service?.id ?? null,
+          serviceName: appointment.service?.name ?? "-",
+          serviceAmount,
+          paidAmount,
+          remainingAmount,
+          status: appointment.status,
+          statusLabel: getAppointmentStatusLabel(appointment.status),
+        };
+      }),
+    );
+
+    return {
+      appointments: summaries.filter((item) => item.remainingAmount > 0),
+      availablePaymentMethods: getAvailablePaymentMethods(
+        company?.accepted_payment_methods || [],
+      ),
+    };
+  }
+
+  async getRevenueEntries(id, startDate, endDate, options = {}) {
+    const includeHistoricalAppointments = options.includeHistoricalAppointments ?? true;
+    const transactions = await prisma.revenueTransaction.findMany({
+      where: {
+        company_id: Number(id),
+        occurred_at: {
+          gte: startDate,
+          lte: endDate,
+        },
+        status: { not: "CANCELED" },
+      },
+      include: {
+        client: {
+          select: { id: true, name: true },
+        },
+        service: {
+          select: { id: true, name: true },
+        },
+        employee: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    const linkedAppointmentIds = transactions
+      .map((transaction) => transaction.appointment_id)
+      .filter(Boolean);
+
+    const appointments = includeHistoricalAppointments
+      ? await prisma.appointment.findMany({
+          where: {
+            company_id: Number(id),
+            status: { in: ["COMPLETED", "PENDING", "CONFIRMED"] },
+            payment_method: { not: null },
+            start_time: {
+              gte: startDate,
+              lte: endDate,
+            },
+            ...(linkedAppointmentIds.length
+              ? { id: { notIn: linkedAppointmentIds } }
+              : {}),
+          },
+          include: {
+            client: {
+              select: { id: true, name: true },
+            },
+            service: {
+              select: { id: true, name: true, price: true },
+            },
+            employee: {
+              select: { id: true, name: true },
+            },
+          },
+        })
+      : [];
+
+    return [
+      ...transactions.map((transaction) => this.normalizeTransactionRevenueEntry(transaction)),
+      ...appointments.map((appointment) => this.normalizeAppointmentRevenueEntry(appointment)),
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  async createRevenueTransaction(companyId, payload, options = {}) {
+    const nextCompanyId = Number(companyId);
+    const {
+      appointment_id,
+      amount,
+      payment_method,
+      status,
+      description,
+      occurred_at,
+    } = payload;
+
+    const [company, appointment] = await Promise.all([
+      prisma.company.findUnique({
+        where: { id: nextCompanyId },
+        select: { accepted_payment_methods: true },
+      }),
+      prisma.appointment.findUnique({
+        where: { id: Number(appointment_id) },
+        include: {
+          service: {
+            select: {
+              id: true,
+              name: true,
+              price: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    if (!appointment || appointment.company_id !== nextCompanyId) {
+      throw new Error("Agendamento não encontrado para a empresa informada");
+    }
+
+    if (
+      company?.accepted_payment_methods?.length &&
+      !company.accepted_payment_methods.includes(payment_method)
+    ) {
+      throw new RevenueTransactionConflictError(
+        "A forma de pagamento informada nao esta ativa para esta empresa",
+      );
+    }
+
+    if (!appointment.service) {
+      throw new Error("O agendamento informado não possui serviço vinculado");
+    }
+
+    if (appointment.status === "CANCELED") {
+      throw new Error("Não é possível registrar transações para um agendamento cancelado");
+    }
+
+    try {
+      const createdTransactionId = await prisma.$transaction(async (tx) => {
+        const currentPaidAmount = await this.getAppointmentRevenueSummary(appointment.id, tx);
+        const serviceAmount = roundCurrency(appointment.service?.price || 0);
+        const nextAmount = roundCurrency(amount);
+        const nextTotalAmount = roundCurrency(currentPaidAmount + nextAmount);
+
+        if (nextTotalAmount > serviceAmount) {
+          const remainingAmount = roundCurrency(Math.max(serviceAmount - currentPaidAmount, 0));
+
+          throw new RevenueTransactionConflictError(
+            remainingAmount > 0
+              ? `Esse serviço possui apenas ${remainingAmount.toFixed(2)} disponível para lançamento`
+              : "Esse serviço já teve o valor total lançado",
+          );
+        }
+
+        const transaction = await tx.revenueTransaction.create({
+          data: {
+            company_id: nextCompanyId,
+            appointment_id: appointment.id,
+            client_id: appointment.client_id,
+            employee_id: appointment.employee_id,
+            service_id: appointment.service_id,
+            description:
+              description || "Receita registrada a partir do agendamento",
+            amount,
+            payment_method,
+            status,
+            origin: "APPOINTMENT",
+            occurred_at,
+          },
+        });
+
+        await tx.appointment.update({
+          where: { id: appointment.id },
+          data: {
+            payment_method,
+          },
+        });
+
+        return transaction.id;
+      });
+
+      const createdTransaction = await prisma.revenueTransaction.findUnique({
+        where: { id: createdTransactionId },
+        include: {
+          client: {
+            select: { id: true, name: true },
+          },
+          service: {
+            select: { id: true, name: true },
+          },
+          employee: {
+            select: { id: true, name: true },
+          },
+        },
+      });
+
+      if (!createdTransaction) {
+        throw new Error("Não foi possível localizar a transação criada");
+      }
+
+      return this.normalizeTransactionRevenueEntry(createdTransaction);
+    } catch (error) {
+      if (error instanceof RevenueTransactionConflictError) {
+        throw error;
+      }
+
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        const target = Array.isArray(error.meta?.target)
+          ? error.meta.target
+          : [error.meta?.target].filter(Boolean);
+
+        if (target.includes("appointment_id")) {
+          throw new RevenueTransactionConflictError(
+            "Este ambiente ainda está limitando um lançamento por agendamento. Remova a constraint única de appointment_id em revenue_transactions.",
+          );
+        }
+
+        throw new RevenueTransactionConflictError("Não foi possível registrar a transação");
+      }
+
+      throw error;
+    }
+  }
+
+  async getRevenues(id, page = 1, limit = 50, time = 'month') {
+    page = Number(page);
+    const parsedLimit = Number(limit);
+    const now = new Date();
+    const startDate = this.getPeriodStartDate(time, now);
+    const entries = await this.getRevenueEntries(id, startDate, now, {
+      includeHistoricalAppointments: false,
+    });
+    const total = entries.length;
+    const payments = entries.slice((page - 1) * parsedLimit, page * parsedLimit);
 
     return {
       page,
-      limit,
+      limit: parsedLimit,
       total,
-      totalPages: Math.ceil(total / limit),
-      data: payments.map((a) => ({
-        id: a.id,
-        date: a.start_time.toISOString(),
-        clientName: a.client.name,
-        serviceName: a.service.name,
-        professionalName: a.employee.name,
-        paymentMethod: a.payment_method,
-        value: Number(a.service.price),
-        status: a.status,
-      }))
+      totalPages: Math.ceil(total / parsedLimit),
+      data: payments,
     };
   }
 
@@ -1557,113 +1878,53 @@ export class CompanyService {
     const now = new Date();
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
     const startDate = this.getPeriodStartDate(time, now);
-
-    const [
-      revenueReceivedRaw,
-      revenuePendingRaw,
-      totalTransactions,
-      revenueByMonthRaw,
-      revenueByPaymentRaw,
-      recentPayments,
-    ] = await Promise.all([
-      // 💰 receita recebida
-      prisma.$queryRaw`
-        SELECT COALESCE(SUM(s.price), 0) as total
-        FROM appointments a
-        JOIN services s ON s.id = a.service_id
-        WHERE a.company_id = ${id}
-          AND a.status = 'COMPLETED'
-          AND a.start_time >= ${startDate}
-          AND a.start_time <= ${now}
-      `,
-
-      // ⏳ receita pendente
-      prisma.$queryRaw`
-        SELECT COALESCE(SUM(s.price), 0) as total
-        FROM appointments a
-        JOIN services s ON s.id = a.service_id
-        WHERE a.company_id = ${id}
-          AND a.status IN ('PENDING', 'CONFIRMED')
-          AND a.start_time >= ${startDate}
-          AND a.start_time <= ${now}
-      `,
-
-      // 🔢 nº de transações pagas
-      prisma.appointment.count({
-        where: {
-          company_id: id,
-          status: "COMPLETED",
-          start_time: { gte: startDate, lte: now },
-        },
+    const [periodEntries, lastSixMonthEntries] = await Promise.all([
+      this.getRevenueEntries(id, startDate, now, {
+        includeHistoricalAppointments: false,
       }),
-
-      // 📊 receita últimos 6 meses
-      prisma.$queryRaw`
-        SELECT
-          TO_CHAR(a.start_time, 'YYYY-MM') as month,
-          SUM(s.price)::float as total
-        FROM appointments a
-        JOIN services s ON s.id = a.service_id
-        WHERE a.company_id = ${id}
-          AND a.status = 'COMPLETED'
-          AND a.start_time >= ${sixMonthsAgo}
-        GROUP BY month
-        ORDER BY month
-      `,
-
-      // 💳 por forma de pagamento
-      prisma.$queryRaw`
-        SELECT 
-          a.payment_method,
-          SUM(s.price)::float as total
-        FROM appointments a
-        JOIN services s ON s.id = a.service_id
-        WHERE a.company_id = ${id}
-          AND a.status = 'COMPLETED'
-          AND a.payment_method IS NOT NULL
-          AND a.start_time >= ${startDate}
-          AND a.start_time <= ${now}
-        GROUP BY a.payment_method
-      `,
-
-      // 🔹 recentes
-      prisma.appointment.findMany({
-        where: {
-          company_id: id,
-          status: { in: ["COMPLETED", "PENDING"], },
-          payment_method: { not: null },
-          start_time: { gte: startDate, lte: now },
-        },
-        orderBy: { start_time: "desc" },
-        include: {
-          service: true,
-          client: true,
-          employee: true,
-        },
-        take: 50,
+      this.getRevenueEntries(id, sixMonthsAgo, now, {
+        includeHistoricalAppointments: false,
       }),
     ]);
 
-    const revenueReceived = Number(revenueReceivedRaw[0]?.total || 0);
-    const revenuePending = Number(revenuePendingRaw[0]?.total || 0);
-
-    const avgTicket = totalTransactions > 0
-      ? revenueReceived / totalTransactions
-      : 0;
+    const receivedEntries = periodEntries.filter((entry) => entry.status === "COMPLETED");
+    const pendingEntries = periodEntries.filter((entry) => entry.status === "PENDING");
+    const totalTransactions = periodEntries.length;
+    const revenueReceived = receivedEntries.reduce((sum, entry) => sum + entry.value, 0);
+    const revenuePending = pendingEntries.reduce((sum, entry) => sum + entry.value, 0);
+    const avgTicket = receivedEntries.length > 0 ? revenueReceived / receivedEntries.length : 0;
 
     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const revenueByMonthMap = new Map();
 
-    const revenueByMonth = revenueByMonthRaw.map((item) => {
-      const [, month] = item.month.split('-');
+    lastSixMonthEntries
+      .filter((entry) => entry.status === "COMPLETED")
+      .forEach((entry) => {
+        const date = new Date(entry.date);
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+
+        revenueByMonthMap.set(key, (revenueByMonthMap.get(key) || 0) + entry.value);
+      });
+
+    const revenueByMonth = [...revenueByMonthMap.entries()].map(([key, total]) => {
+      const [, month] = key.split('-');
       return {
         month: monthNames[parseInt(month, 10) - 1],
-        total: Number(item.total),
+        total,
       };
     });
 
-    const revenueByPayment = revenueByPaymentRaw.map((item) => ({
-      method: item.payment_method,
-      total: Number(item.total),
+    const revenueByPaymentMap = new Map();
+    receivedEntries.forEach((entry) => {
+      revenueByPaymentMap.set(
+        entry.paymentMethod,
+        (revenueByPaymentMap.get(entry.paymentMethod) || 0) + entry.value,
+      );
+    });
+
+    const revenueByPayment = [...revenueByPaymentMap.entries()].map(([method, total]) => ({
+      method,
+      total,
     }));
 
     return {
@@ -1673,16 +1934,7 @@ export class CompanyService {
       totalTransactions,
       revenueByMonth,
       revenueByPayment,
-      recentPayments: recentPayments.map((a) => ({
-        id: a.id,
-        date: a.start_time.toISOString(),
-        clientName: a.client.name,
-        serviceName: a.service.name,
-        professionalName: a.employee.name,
-        paymentMethod: a.payment_method,
-        value: Number(a.service.price),
-        status: a.status,
-      }))
+      recentPayments: periodEntries.slice(0, 50),
     };
   }
 
