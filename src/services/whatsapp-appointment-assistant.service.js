@@ -208,6 +208,64 @@ export class WhatsAppAppointmentAssistantService {
     ].some((term) => normalized.includes(normalizeText(term)))
   }
 
+  isHumanHandoffIntent(message = "") {
+    const normalized = normalizeText(message)
+
+    return [
+      "quero falar com atendente",
+      "quero falar com uma pessoa",
+      "quero falar com alguem",
+      "quero falar com humano",
+      "quero falar com suporte",
+      "me passa para atendente",
+      "me passa para uma pessoa",
+      "me passa para o suporte",
+      "prefiro falar com alguem",
+      "prefiro falar com uma pessoa",
+      "prefiro falar com atendente",
+      "prefiro falar com suporte",
+      "chama atendente",
+      "chama suporte",
+      "atendente",
+      "suporte humano",
+      "atendimento humano",
+      "falar com suporte",
+      "falar com atendente",
+      "falar com humano",
+      "nao quero falar com bot",
+      "não quero falar com bot",
+      "sem chatbot",
+      "sem robô",
+      "sem robo",
+    ].some((term) => normalized.includes(normalizeText(term)))
+  }
+
+  isBotResumeIntent(message = "") {
+    const normalized = normalizeText(message)
+
+    return [
+      "quero agendar",
+      "quero marcar",
+      "quero remarcar",
+      "quero cancelar",
+      "pode continuar",
+      "pode me ajudar",
+      "pode responder",
+      "pode voltar",
+      "vamos continuar",
+      "vamos seguir",
+      "pode seguir",
+      "segue comigo",
+      "segue aqui",
+      "continuar por aqui",
+      "voltei",
+      "agora quero agendar",
+      "agora quero marcar",
+      "me ajuda a agendar",
+      "me ajuda a marcar",
+    ].some((term) => normalized.includes(normalizeText(term)))
+  }
+
   isSchedulingIntent(message = "") {
     const normalized = normalizeText(message)
 
@@ -446,6 +504,8 @@ export class WhatsAppAppointmentAssistantService {
       if (this.isNegative(message)) return "negative"
     }
 
+    if (this.isHumanHandoffIntent(message)) return "human_handoff"
+    if (this.isBotResumeIntent(message)) return "bot_resume"
     if (this.isRestartIntent(message)) return "restart"
     if (this.isNoSchedulingIntent(message)) return "no_scheduling"
     if (this.isCancellationIntent(message)) return "cancellation"
@@ -517,6 +577,35 @@ export class WhatsAppAppointmentAssistantService {
   getSelectedProfessionalFromState(state, professionals = []) {
     if (!state?.employeeId) return null
     return professionals.find((professional) => professional.id === Number(state.employeeId)) || null
+  }
+
+  shouldResumeFromHumanHandoff(message = "", intentCategory = "unknown", previousState = null) {
+    const normalizedIntent = String(intentCategory || "unknown").trim().toLowerCase()
+
+    if (this.isHumanHandoffIntent(message) || normalizedIntent === "human_handoff") {
+      return false
+    }
+
+    if (this.isBotResumeIntent(message) || normalizedIntent === "bot_resume") {
+      return true
+    }
+
+    return [
+      "scheduling",
+      "cancellation",
+      "reschedule",
+      "appointment_lookup",
+      "payment",
+      "amenities",
+      "service_info",
+      "professional_info",
+      "professional_schedule",
+      "restart",
+      "no_scheduling",
+      "affirmative",
+      "negative",
+      "conversation_continuation",
+    ].includes(normalizedIntent) || this.inferLocalIntent(message, previousState) === "conversation_continuation"
   }
 
   findServiceByHint(hint = "", services = []) {
@@ -1078,6 +1167,10 @@ export class WhatsAppAppointmentAssistantService {
   }
 
   buildServiceOptionsReply(customerName, services = []) {
+    if (services.length === 0) {
+      return this.buildNoServicesConfiguredReply(customerName)
+    }
+
     const options = services
       .slice(0, 5)
       .map((service, index) => {
@@ -1111,6 +1204,10 @@ export class WhatsAppAppointmentAssistantService {
   }
 
   buildAskServiceWithProfessionalReply(customerName, professional, services = []) {
+    if (services.length === 0) {
+      return this.buildNoServicesForProfessionalReply(customerName, professional)
+    }
+
     const options = services
       .slice(0, 5)
       .map((service, index) => `${index + 1}. ${service.name} - R$ ${formatCurrency(service.price)}`)
@@ -1162,6 +1259,38 @@ export class WhatsAppAppointmentAssistantService {
       "Entendi. Esse horário não está livre, mas encontrei estas opções próximas 😊",
       options,
       "Se alguma te atender, me responda com o número da opção.",
+    ].join("\n\n")
+  }
+
+  buildNoServicesConfiguredReply(customerName) {
+    return [
+      `Oi, ${firstName(customerName)}! 😊`,
+      "No momento, ainda não encontrei serviços disponíveis para agendamento por aqui.",
+      "Se preferir, posso te ajudar depois que a equipe atualizar o cadastro 💛",
+    ].join("\n\n")
+  }
+
+  buildNoProfessionalsConfiguredReply(customerName) {
+    return [
+      `Oi, ${firstName(customerName)}! 😊`,
+      "No momento, ainda não encontrei profissionais disponíveis para realizar agendamentos por aqui.",
+      "Se quiser, você pode tentar novamente mais tarde ou falar com a equipe da empresa 💛",
+    ].join("\n\n")
+  }
+
+  buildNoServicesForProfessionalReply(customerName, professional) {
+    return [
+      "Entendi 😊",
+      `No momento, ${professionalReference(professional.name)} ainda não está vinculado(a) a serviços disponíveis para agendamento por aqui.`,
+      "Se quiser, posso verificar outra profissional ou te ajudar quando a equipe atualizar isso 💛",
+    ].join("\n\n")
+  }
+
+  buildNoProfessionalsForServiceReply(customerName, service) {
+    return [
+      "Entendi 😊",
+      `No momento, ${service.name} está sem profissionais disponíveis para atendimento por aqui.`,
+      "Se quiser, posso tentar outro serviço ou você pode falar com a equipe para conferir novas opções 💛",
     ].join("\n\n")
   }
 
@@ -1596,6 +1725,19 @@ export class WhatsAppAppointmentAssistantService {
     const selectedServiceFromMessage = interpretedService || explicitServiceFromMessage || currentService
     const openAppointments = await this.getOpenAppointmentsForCustomer(company.id, customer.id)
 
+    if (serviceOptions.length === 0) {
+      return this.buildStructuredReply(
+        "no_services_configured",
+        {},
+        {
+          fallbackText: this.buildNoServicesConfiguredReply(customer.name),
+          interactionType: "INQUIRY",
+          interactionStatus: "OTHER",
+          conversationState: this.buildStatePayload({ phase: "idle" }),
+        },
+      )
+    }
+
     if (previousState?.phase === "awaiting_cancel_selection") {
       const appointmentOptionIndex = this.extractOptionIndex(messageText, previousState?.appointmentOptions?.length || 0)
       const selectedAppointment = appointmentOptionIndex !== null
@@ -1682,6 +1824,24 @@ export class WhatsAppAppointmentAssistantService {
 
     if (selectedProfessionalFromMessage && !selectedServiceFromMessage && schedulingIntent) {
       const professionalServices = await this.getServicesForProfessional(company.id, selectedProfessionalFromMessage.id)
+
+      if (professionalServices.length === 0) {
+        return this.buildStructuredReply(
+          "no_services_for_professional",
+          {
+            professionalName: selectedProfessionalFromMessage.name,
+          },
+          {
+            fallbackText: this.buildNoServicesForProfessionalReply(
+              customer.name,
+              selectedProfessionalFromMessage,
+            ),
+            interactionType: "INQUIRY",
+            interactionStatus: "OTHER",
+            conversationState: this.buildStatePayload({ phase: "idle" }),
+          },
+        )
+      }
 
       return this.buildStructuredReply(
         "ask_service_with_professional",
@@ -2044,6 +2204,19 @@ export class WhatsAppAppointmentAssistantService {
       )
     }
 
+    if ((companyProfile.professionals || []).length === 0) {
+      return this.buildStructuredReply(
+        "no_professionals_configured",
+        {},
+        {
+          fallbackText: this.buildNoProfessionalsConfiguredReply(customer.name),
+          interactionType: "INQUIRY",
+          interactionStatus: "OTHER",
+          conversationState: this.buildStatePayload({ phase: "idle" }),
+        },
+      )
+    }
+
     if (previousState?.phase === "awaiting_confirmation") {
       if (interpretedIntent === "affirmative" || this.isAffirmative(messageText)) {
         try {
@@ -2236,6 +2409,21 @@ export class WhatsAppAppointmentAssistantService {
 
     const serviceProfessionalsResult = await this.getProfessionalsForService(company.id, selectedService.id)
     const serviceProfessionals = serviceProfessionalsResult.employees || []
+
+    if (serviceProfessionals.length === 0) {
+      return this.buildStructuredReply(
+        "no_professionals_for_service",
+        {
+          serviceName: selectedService.name,
+        },
+        {
+          fallbackText: this.buildNoProfessionalsForServiceReply(customer.name, selectedService),
+          interactionType: previousState?.rescheduleAppointmentId ? "REAPPOINTMENT" : "APPOINTMENT",
+          interactionStatus: "OTHER",
+          conversationState: this.buildStatePayload({ phase: "idle" }),
+        },
+      )
+    }
 
     if (selectedProfessional) {
       const professionalCanPerformService = serviceProfessionals.some(

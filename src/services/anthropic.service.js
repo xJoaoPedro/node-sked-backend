@@ -85,7 +85,7 @@ export class AnthropicService {
           "Responda somente com JSON válido, sem markdown. " +
           "Use este schema: " +
           "{\"normalizedMessage\":string,\"intentCategory\":string,\"serviceName\":string|null,\"professionalName\":string|null,\"dateReference\":string|null,\"timeReference\":string|null,\"periodReference\":string|null,\"confidence\":number}. " +
-          "intentCategory deve ser um entre: scheduling, cancellation, reschedule, appointment_lookup, payment, amenities, service_info, professional_info, professional_schedule, restart, no_scheduling, affirmative, negative, out_of_scope, unknown. " +
+          "intentCategory deve ser um entre: scheduling, cancellation, reschedule, appointment_lookup, payment, amenities, service_info, professional_info, professional_schedule, restart, no_scheduling, affirmative, negative, human_handoff, bot_resume, out_of_scope, unknown. " +
           "confidence deve ir de 0 a 1.",
         messages: [
           {
