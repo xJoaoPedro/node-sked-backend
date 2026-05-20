@@ -1,18 +1,19 @@
-import { CompanyUserService } from "../services/company_user.service.js";
+import { ProfessionalService } from "../services/professional.service.js";
 import {
-  createCompanyUserValidator,
-  updateCompanyUserValidator,
-} from "../validators/company_user.validator.js";
+  createProfessionalValidator,
+  updateProfessionalValidator,
+} from "../validators/professional.validator.js";
 
-const service = new CompanyUserService();
+const service = new ProfessionalService();
 
-export default class CompanyUserController {
+export default class ProfessionalController {
   async findAll(req, res) {
-    const companiesUsers = await service.findAll();
+    const { id } = req.params
+    const professionals = await service.findAll(id);
 
     return res.status(200).json({
       message: "Consulta realizada com sucesso!",
-      data: companiesUsers,
+      data: professionals,
     });
   }
 
@@ -25,9 +26,9 @@ export default class CompanyUserController {
       });
     }
 
-    const companyUser = await service.findOne(id);
+    const professional = await service.findOne(id);
 
-    if (!companyUser) {
+    if (!professional) {
       res.status(404).json({
         message: "Funcionário não encontrado",
       });
@@ -35,12 +36,12 @@ export default class CompanyUserController {
 
     res.status(200).json({
       message: "Funcionário encontrado com sucesso!",
-      data: companyUser,
+      data: professional,
     });
   }
 
   async create(req, res) {
-    const parsed = createCompanyUserValidator.safeParse(req.body);
+    const parsed = createProfessionalValidator.safeParse(req.body);
 
     if (!parsed.success) {
       return res.status(400).json({
@@ -55,7 +56,7 @@ export default class CompanyUserController {
   }
 
   async update(req, res) {
-    const parsed = updateCompanyUserValidator.safeParse(req.body);
+    const parsed = updateProfessionalValidator.safeParse(req.body);
 
     if (!parsed.success) {
       return res.status(400).json({
@@ -69,7 +70,7 @@ export default class CompanyUserController {
     if (update) return res.status(204).json();
     else
       return res.status(404).json({
-        message: "Empresa não encontrada",
+        message: "Funcionário não encontrado",
       });
   }
 
@@ -79,7 +80,7 @@ export default class CompanyUserController {
     if (deleted) return res.status(204).json();
     else
       return res.status(404).json({
-        message: "Empresa não encontrada",
+        message: "Funcionário não encontrado",
       });
   }
 }

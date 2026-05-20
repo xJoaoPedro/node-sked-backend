@@ -1,10 +1,16 @@
-import { AppointmentService } from "../services/appointment.service.js";
+import {
+  AppointmentConflictError,
+  AppointmentService,
+} from "../services/appointment.service.js";
 import {
   createAppointmentValidator,
   updateAppointmentValidator,
 } from "../validators/appointment.validator.js";
 
 const service = new AppointmentService();
+const getRealtimeOptions = (req) => ({
+  excludedSocketId: req.headers["x-socket-id"],
+});
 
 export default class AppointmentController {
   async findAll(req, res) {
@@ -73,9 +79,30 @@ export default class AppointmentController {
       });
     }
 
-    await service.create(req.body);
+    let createdAppointment;
 
-    res.status(204).json();
+    try {
+      createdAppointment = await service.create(req.body, getRealtimeOptions(req));
+    } catch (error) {
+      if (error instanceof AppointmentConflictError) {
+        return res.status(409).json({
+          message: error.message,
+        });
+      }
+
+      if (error instanceof Error) {
+        return res.status(400).json({
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
+
+    res.status(201).json({
+      message: "Agendamento criado com sucesso!",
+      data: createdAppointment,
+    });
   }
 
   async update(req, res) {
@@ -88,9 +115,31 @@ export default class AppointmentController {
       });
     }
 
-    const update = await service.update(Number(req.params.id), parsed.data);
+    let update;
 
-    if (update) return res.status(204).json();
+    try {
+      update = await service.update(Number(req.params.id), parsed.data, getRealtimeOptions(req));
+    } catch (error) {
+      if (error instanceof AppointmentConflictError) {
+        return res.status(409).json({
+          message: error.message,
+        });
+      }
+
+      if (error instanceof Error) {
+        return res.status(400).json({
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
+
+    if (update)
+      return res.status(200).json({
+        message: "Agendamento atualizado com sucesso!",
+        data: update,
+      });
     else
       return res.status(404).json({
         message: "Agendamento não encontrado",
@@ -98,7 +147,7 @@ export default class AppointmentController {
   }
 
   async delete(req, res) {
-    const deleted = await service.delete(Number(req.params.id));
+    const deleted = await service.delete(Number(req.params.id), getRealtimeOptions(req));
 
     if (deleted) return res.status(204).json();
     else

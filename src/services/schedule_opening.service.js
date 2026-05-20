@@ -1,6 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import pkg from "@prisma/client";
-import { timeToDate } from "../utils/dateParser.js"
+import { timeToDate } from "../utils/parsers/dateParser.js"
 
 const { PrismaClient } = pkg;
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });

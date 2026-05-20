@@ -4,6 +4,11 @@ import BotInteractionController from "../../controllers/bot_interaction.controll
 const botInteractionsRouter = Router();
 const controller = new BotInteractionController();
 
+botInteractionsRouter.post("/evolution/instance", controller.createEvolutionInstance);
+botInteractionsRouter.post("/evolution/instance/connect", controller.connectEvolutionInstance);
+botInteractionsRouter.get("/evolution/instance/status", controller.evolutionConnectionState);
+botInteractionsRouter.post("/evolution/message/text", controller.sendEvolutionText);
+
 // GET /
 botInteractionsRouter.get("/", controller.findAll);
 
