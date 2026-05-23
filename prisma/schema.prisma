@@ -40,6 +40,7 @@ model Company {
   evolution_connection_status String?            @db.VarChar(50)
   evolution_connected_phone String?              @db.VarChar(20)
   evolution_last_qr        String?               @db.Text
+  evolution_auto_messages_enabled Boolean        @default(true)
   plan                     plan_enum             @default(FREE)
   status                   company_status_enum   @default(PENDING)
   approve_date             DateTime?             @db.Timestamptz(6)

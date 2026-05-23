@@ -73,6 +73,12 @@ companiesRouter.get('/:id/evolution/status', controller.getEvolutionStatus);
 // POST /:id/evolution/connect
 companiesRouter.post('/:id/evolution/connect', controller.connectEvolutionInstance);
 
+// POST /:id/evolution/disconnect
+companiesRouter.post('/:id/evolution/disconnect', controller.disconnectEvolutionInstance);
+
+// PATCH /:id/evolution/auto-messages
+companiesRouter.patch('/:id/evolution/auto-messages', controller.setEvolutionAutoMessagesEnabled);
+
 // PATCH /:id
 companiesRouter.patch("/:id", controller.update);
 

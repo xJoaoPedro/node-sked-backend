@@ -302,6 +302,69 @@ export class EvolutionService {
     });
   }
 
+  async sendPresence({ instanceName, number, presence = "composing", delay = 0 }) {
+    return this.request(`/chat/sendPresence/${this.getInstanceName(instanceName)}`, {
+      method: "POST",
+      body: {
+        number,
+        presence,
+        delay,
+      },
+    });
+  }
+
+  createTypingIndicator({ instanceName, number, presence = "composing", delayMs = 12000, renewMs = 9000 }) {
+    if (!instanceName || !number) {
+      return {
+        stop: async () => null,
+      };
+    }
+
+    let active = true;
+    let timer = null;
+
+    const scheduleNext = () => {
+      if (!active) return;
+
+      timer = setTimeout(() => {
+        pulse().catch(() => null);
+      }, renewMs);
+    };
+
+    const pulse = () => {
+      if (!active) return;
+
+      this.sendPresence({
+        instanceName,
+        number,
+        presence,
+        delay: delayMs,
+      }).catch(() => null);
+
+      scheduleNext();
+    };
+
+    pulse();
+
+    return {
+      stop: async () => {
+        active = false;
+
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+
+        return this.sendPresence({
+          instanceName,
+          number,
+          presence: "paused",
+          delay: 0,
+        }).catch(() => null);
+      },
+    };
+  }
+
   async markMessageAsRead({ instanceName, messageId, remoteJid, fromMe = false }) {
     if (!instanceName || !messageId || !remoteJid) return null;
 

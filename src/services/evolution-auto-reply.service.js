@@ -223,6 +223,10 @@ export class EvolutionAutoReplyService {
         return null;
       }
 
+      if (companyByInstance.evolution_auto_messages_enabled === false) {
+        return null;
+      }
+
       return companyByInstance;
     }
 
@@ -231,7 +235,15 @@ export class EvolutionAutoReplyService {
 
     if (!instance) return null;
 
-    return this.companyService.findByWhatsAppNumber(instance.number || instance.ownerJid || "");
+    const companyByPhone = await this.companyService.findByWhatsAppNumber(
+      instance.number || instance.ownerJid || "",
+    );
+
+    if (companyByPhone?.evolution_auto_messages_enabled === false) {
+      return null;
+    }
+
+    return companyByPhone;
   }
 
   buildFallbackReply(companyProfile, customerMessage) {
@@ -417,85 +429,172 @@ export class EvolutionAutoReplyService {
     const customerPhone = this.extractCustomerPhone(payloadData);
     if (!outboundPhone || !customerPhone) return;
 
-    const customerName = payloadData.pushName?.trim() || "Cliente";
-    const customer = await this.customerService.findOrCreateByCompanyAndPhone({
-      company_id: company.id,
-      phone: customerPhone,
-      name: customerName,
+    const typingIndicator = this.evolutionService.createTypingIndicator({
+      instanceName: body.instance,
+      number: outboundPhone,
     });
 
-    const customerMessage = this.extractText(payloadData);
-    const companyProfile = await this.companyService.getWhatsAppAssistantProfile(company.id);
-    const latestInteraction = await this.botInteractionService.findLatestConversation(
-      company.id,
-      customer.id,
-    );
-    const messageInterpretation = await this.interpretAppointmentMessage({
-      companyProfile,
-      customerName: customer.name,
-      customerMessage,
-      latestInteraction,
-    });
-    const latestInteractionData =
-      latestInteraction?.data && typeof latestInteraction.data === "object"
-        ? latestInteraction.data
-        : {};
-    const previousState =
-      latestInteractionData.conversationState && typeof latestInteractionData.conversationState === "object"
-        ? latestInteractionData.conversationState
-        : null;
-    const interpretedIntent = String(messageInterpretation?.intentCategory || "unknown").trim().toLowerCase();
-    const localIntent = this.whatsAppAppointmentAssistantService.inferLocalIntent(
-      customerMessage,
-      previousState,
-    );
-    const humanHandoffRequested =
-      localIntent === "human_handoff" || interpretedIntent === "human_handoff";
-    const hasResumeEntitySignal =
-      this.whatsAppAppointmentAssistantService.getRelevantServices(
+    try {
+      const customerName = payloadData.pushName?.trim() || "Cliente";
+      const customer = await this.customerService.findOrCreateByCompanyAndPhone({
+        company_id: company.id,
+        phone: customerPhone,
+        name: customerName,
+      });
+
+      const customerMessage = this.extractText(payloadData);
+      const companyProfile = await this.companyService.getWhatsAppAssistantProfile(company.id);
+      const latestInteraction = await this.botInteractionService.findLatestConversation(
+        company.id,
+        customer.id,
+      );
+      const messageInterpretation = await this.interpretAppointmentMessage({
+        companyProfile,
+        customerName: customer.name,
         customerMessage,
-        companyProfile?.services || [],
-        1,
-      ).length > 0 ||
-      this.whatsAppAppointmentAssistantService.getRelevantProfessionals(
+        latestInteraction,
+      });
+      const latestInteractionData =
+        latestInteraction?.data && typeof latestInteraction.data === "object"
+          ? latestInteraction.data
+          : {};
+      const previousState =
+        latestInteractionData.conversationState && typeof latestInteractionData.conversationState === "object"
+          ? latestInteractionData.conversationState
+          : null;
+      const interpretedIntent = String(messageInterpretation?.intentCategory || "unknown").trim().toLowerCase();
+      const localIntent = this.whatsAppAppointmentAssistantService.inferLocalIntent(
         customerMessage,
-        companyProfile?.professionals || [],
-        1,
-      ).length > 0 ||
-      Boolean(
-        this.whatsAppAppointmentAssistantService.parseDateFromMessage(customerMessage) ||
-        this.whatsAppAppointmentAssistantService.parseTimeFromMessage(customerMessage) ||
-        this.whatsAppAppointmentAssistantService.parsePeriodFromMessage(customerMessage),
-      ) ||
-      this.whatsAppAppointmentAssistantService.extractOptionIndex(
-        customerMessage,
-        Math.max(previousState?.serviceOptions?.length || 0, previousState?.slotOptions?.length || 0),
-      ) !== null;
+        previousState,
+      );
+      const humanHandoffRequested =
+        localIntent === "human_handoff" || interpretedIntent === "human_handoff";
     const humanHandoffActive = Boolean(latestInteractionData?.humanHandoffActive);
     const shouldResumeAutomation = humanHandoffActive
-      ? (
-          this.whatsAppAppointmentAssistantService.shouldResumeFromHumanHandoff(
-            customerMessage,
-            interpretedIntent !== "unknown" ? interpretedIntent : localIntent,
-            previousState,
-          ) || hasResumeEntitySignal
+      ? this.whatsAppAppointmentAssistantService.shouldResumeFromHumanHandoff(
+          customerMessage,
+          interpretedIntent !== "unknown" ? interpretedIntent : localIntent,
+          previousState,
         )
       : false;
 
-    if (humanHandoffRequested && !humanHandoffActive) {
-      const replyText = formatWhatsappParagraphs(
-        [
-          "Claro! 😊",
-          "Vou parar as respostas automáticas por aqui para que você possa seguir com o atendimento humano.",
-          "Quando quiser voltar a falar comigo sobre agendamento, é só mandar sua mensagem por aqui novamente 💛",
-        ].join("\n\n"),
-      );
+      if (humanHandoffRequested && !humanHandoffActive) {
+        const replyText = formatWhatsappParagraphs(
+          [
+            "Claro! 😊",
+            "Vou parar as respostas automáticas por aqui para que você possa seguir com o atendimento humano.",
+            "Quando quiser voltar a falar comigo sobre agendamento, é só mandar sua mensagem por aqui novamente 💛",
+          ].join("\n\n"),
+        );
+
+        await this.botInteractionService.create({
+          company_id: company.id,
+          client_id: customer.id,
+          type: "OTHER",
+          status: "IN_PROGRESS",
+          data: {
+            source: "evolution-webhook",
+            event: body.event,
+            instanceName: body.instance,
+            messageId,
+            remoteJid: payloadData?.key?.remoteJid || null,
+            pushName: payloadData.pushName || null,
+            inboundText: customerMessage || null,
+            outboundText: replyText,
+            humanHandoffActive: true,
+            humanHandoffRequestedAt: new Date().toISOString(),
+            conversationState: previousState || this.whatsAppAppointmentAssistantService.buildStatePayload({ phase: "idle" }),
+          },
+        });
+
+        this.markProcessed(messageId);
+
+        socketServer.emitNotificationToCompany(
+          company.id,
+          "whatsapp:human-handoff-requested",
+          {
+            ...buildHumanHandoffNotice(customer.name, customerMessage),
+            customerId: customer.id,
+            customerName: customer.name,
+            phone: customer.phone,
+          },
+        );
+
+        await this.evolutionService.sendTextWithRetry({
+          instanceName: body.instance,
+          number: outboundPhone,
+          text: replyText,
+        });
+
+        await this.evolutionService.markMessageAsRead({
+          instanceName: body.instance,
+          messageId,
+          remoteJid: payloadData?.key?.remoteJid || "",
+          fromMe: false,
+        }).catch((error) => {
+          console.error("Evolution markMessageAsRead error:", error.message);
+        });
+
+        return;
+      }
+
+      if (humanHandoffActive && !shouldResumeAutomation) {
+        await this.botInteractionService.create({
+          company_id: company.id,
+          client_id: customer.id,
+          type: "OTHER",
+          status: "IN_PROGRESS",
+          data: {
+            source: "evolution-webhook",
+            event: body.event,
+            instanceName: body.instance,
+            messageId,
+            remoteJid: payloadData?.key?.remoteJid || null,
+            pushName: payloadData.pushName || null,
+            inboundText: customerMessage || null,
+            outboundText: null,
+            humanHandoffActive: true,
+            humanHandoffAwaitingHumanReply: true,
+            conversationState: previousState || this.whatsAppAppointmentAssistantService.buildStatePayload({ phase: "idle" }),
+          },
+        });
+
+        this.markProcessed(messageId);
+
+        socketServer.emitNotificationToCompany(
+          company.id,
+          "whatsapp:human-handoff-message",
+          {
+            ...buildHumanHandoffNotice(customer.name, customerMessage),
+            customerId: customer.id,
+            customerName: customer.name,
+            phone: customer.phone,
+          },
+        );
+
+        return;
+      }
+
+      const appointmentReply = await this.whatsAppAppointmentAssistantService.handleMessage({
+        company,
+        companyProfile,
+        customer,
+        customerMessage,
+        latestInteraction,
+        messageInterpretation,
+      });
+      const rawReplyText = appointmentReply?.replyText || await this.buildReply({
+        companyProfile,
+        customerName: customer.name,
+        customerMessage,
+      });
+      const replyText = formatWhatsappParagraphs(rawReplyText);
 
       await this.botInteractionService.create({
         company_id: company.id,
         client_id: customer.id,
-        type: "OTHER",
-        status: "IN_PROGRESS",
+        type: appointmentReply?.interactionType || "INQUIRY",
+        status: appointmentReply?.interactionStatus || "IN_PROGRESS",
         data: {
           source: "evolution-webhook",
           event: body.event,
@@ -505,24 +604,15 @@ export class EvolutionAutoReplyService {
           pushName: payloadData.pushName || null,
           inboundText: customerMessage || null,
           outboundText: replyText,
-          humanHandoffActive: true,
-          humanHandoffRequestedAt: new Date().toISOString(),
-          conversationState: previousState || this.whatsAppAppointmentAssistantService.buildStatePayload({ phase: "idle" }),
+          humanHandoffActive: false,
+          ...(humanHandoffActive && shouldResumeAutomation
+            ? { humanHandoffResumedAt: new Date().toISOString() }
+            : {}),
+          ...(appointmentReply?.interactionData || {}),
         },
       });
 
       this.markProcessed(messageId);
-
-      socketServer.emitNotificationToCompany(
-        company.id,
-        "whatsapp:human-handoff-requested",
-        {
-          ...buildHumanHandoffNotice(customer.name, customerMessage),
-          customerId: customer.id,
-          customerName: customer.name,
-          phone: customer.phone,
-        },
-      );
 
       await this.evolutionService.sendTextWithRetry({
         instanceName: body.instance,
@@ -538,99 +628,8 @@ export class EvolutionAutoReplyService {
       }).catch((error) => {
         console.error("Evolution markMessageAsRead error:", error.message);
       });
-
-      return;
+    } finally {
+      await typingIndicator.stop();
     }
-
-    if (humanHandoffActive && !shouldResumeAutomation) {
-      await this.botInteractionService.create({
-        company_id: company.id,
-        client_id: customer.id,
-        type: "OTHER",
-        status: "IN_PROGRESS",
-        data: {
-          source: "evolution-webhook",
-          event: body.event,
-          instanceName: body.instance,
-          messageId,
-          remoteJid: payloadData?.key?.remoteJid || null,
-          pushName: payloadData.pushName || null,
-          inboundText: customerMessage || null,
-          outboundText: null,
-          humanHandoffActive: true,
-          humanHandoffAwaitingHumanReply: true,
-          conversationState: previousState || this.whatsAppAppointmentAssistantService.buildStatePayload({ phase: "idle" }),
-        },
-      });
-
-      this.markProcessed(messageId);
-
-      socketServer.emitNotificationToCompany(
-        company.id,
-        "whatsapp:human-handoff-message",
-        {
-          ...buildHumanHandoffNotice(customer.name, customerMessage),
-          customerId: customer.id,
-          customerName: customer.name,
-          phone: customer.phone,
-        },
-      );
-
-      return;
-    }
-
-    const appointmentReply = await this.whatsAppAppointmentAssistantService.handleMessage({
-      company,
-      companyProfile,
-      customer,
-      customerMessage,
-      latestInteraction,
-      messageInterpretation,
-    });
-    const rawReplyText = appointmentReply?.replyText || await this.buildReply({
-      companyProfile,
-      customerName: customer.name,
-      customerMessage,
-    });
-    const replyText = formatWhatsappParagraphs(rawReplyText);
-
-    await this.botInteractionService.create({
-      company_id: company.id,
-      client_id: customer.id,
-      type: appointmentReply?.interactionType || "INQUIRY",
-      status: appointmentReply?.interactionStatus || "IN_PROGRESS",
-      data: {
-        source: "evolution-webhook",
-        event: body.event,
-        instanceName: body.instance,
-        messageId,
-        remoteJid: payloadData?.key?.remoteJid || null,
-        pushName: payloadData.pushName || null,
-        inboundText: customerMessage || null,
-        outboundText: replyText,
-        humanHandoffActive: false,
-        ...(humanHandoffActive && shouldResumeAutomation
-          ? { humanHandoffResumedAt: new Date().toISOString() }
-          : {}),
-        ...(appointmentReply?.interactionData || {}),
-      },
-    });
-
-    this.markProcessed(messageId);
-
-    await this.evolutionService.sendTextWithRetry({
-      instanceName: body.instance,
-      number: outboundPhone,
-      text: replyText,
-    });
-
-    await this.evolutionService.markMessageAsRead({
-      instanceName: body.instance,
-      messageId,
-      remoteJid: payloadData?.key?.remoteJid || "",
-      fromMe: false,
-    }).catch((error) => {
-      console.error("Evolution markMessageAsRead error:", error.message);
-    });
   }
 }

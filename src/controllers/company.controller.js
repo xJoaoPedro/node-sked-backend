@@ -424,4 +424,59 @@ export default class CompanyController {
       data: connection,
     });
   }
+
+  async disconnectEvolutionInstance(req, res) {
+    const id = Number(req.params.id);
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    const connection = await service.disconnectEvolutionInstanceForCompany(id);
+
+    if (!connection) {
+      return res.status(404).json({
+        message: "Empresa não encontrada",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Instância da Evolution desconectada com sucesso!",
+      data: connection,
+    });
+  }
+
+  async setEvolutionAutoMessagesEnabled(req, res) {
+    const id = Number(req.params.id);
+    const { enabled } = req.body ?? {};
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        message: "ID inválido",
+      });
+    }
+
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({
+        message: "Campo 'enabled' inválido",
+      });
+    }
+
+    const settings = await service.setEvolutionAutoMessagesEnabled(id, enabled);
+
+    if (!settings) {
+      return res.status(404).json({
+        message: "Empresa não encontrada",
+      });
+    }
+
+    return res.status(200).json({
+      message: enabled
+        ? "Mensagens automáticas ativadas com sucesso!"
+        : "Mensagens automáticas desativadas com sucesso!",
+      data: settings,
+    });
+  }
 }
