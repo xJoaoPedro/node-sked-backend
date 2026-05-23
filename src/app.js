@@ -7,14 +7,12 @@ import apiRouter from "./routes/api.routes.js";
 import { auth } from "./utils/authenticators/authenticator.js";
 import cors from "cors";
 import BotInteractionController from "./controllers/bot_interaction.controller.js";
+import { buildCorsOptions } from "./utils/cors.js";
 
 const app = express();
 const botInteractionController = new BotInteractionController();
 
-app.use(cors({
-  origin: process.env.CORS_URL,
-  credentials: true,
-}));
+app.use(cors(buildCorsOptions()));
 
 app.use(json());
 app.use(express.urlencoded({ extended: true }));
