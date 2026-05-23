@@ -133,6 +133,27 @@ function slugify(value = "") {
 }
 
 export class CompanyService {
+  getTimeZone() {
+    return process.env.APP_TIMEZONE || "America/Sao_Paulo";
+  }
+
+  getMinutesInTimeZone(dateValue) {
+    const date = new Date(dateValue);
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: this.getTimeZone(),
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      })
+        .formatToParts(date)
+        .filter(({ type }) => type !== "literal")
+        .map(({ type, value }) => [type, value]),
+    );
+
+    return Number(parts.hour) * 60 + Number(parts.minute);
+  }
+
   getEvolutionPhoneValidation(companyPhone, connectedPhone, rawConnected = false) {
     const phoneMatchesCompany = comparePhoneVariants(companyPhone, connectedPhone);
     const connected = rawConnected && phoneMatchesCompany !== false;
@@ -289,6 +310,78 @@ export class CompanyService {
     return {
       ...overview,
       ...validation,
+    };
+  }
+
+  async disconnectEvolutionInstanceForCompany(companyId) {
+    const company = await prisma.company.findUnique({
+      where: { id: Number(companyId) },
+      select: {
+        id: true,
+        phone: true,
+        fantasy_name: true,
+        legal_name: true,
+        evolution_instance_name: true,
+      },
+    });
+
+    if (!company) return null;
+
+    const instanceName =
+      company.evolution_instance_name || this.buildEvolutionInstanceName(company);
+
+    await evolutionService.logoutInstance(instanceName).catch(() => null);
+
+    await prisma.company.update({
+      where: { id: Number(companyId) },
+      data: {
+        evolution_instance_name: instanceName,
+        evolution_connection_status: "close",
+        evolution_connected_phone: null,
+        evolution_last_qr: null,
+      },
+    });
+
+    return {
+      instanceName,
+      state: "close",
+      qrCode: null,
+      connectedPhone: null,
+      ...this.getEvolutionPhoneValidation(company.phone, null, false),
+    };
+  }
+
+  async setEvolutionAutoMessagesEnabled(companyId, enabled) {
+    const company = await prisma.company.findUnique({
+      where: { id: Number(companyId) },
+      select: {
+        id: true,
+        evolution_instance_name: true,
+        evolution_connection_status: true,
+        evolution_connected_phone: true,
+        phone: true,
+      },
+    });
+
+    if (!company) return null;
+
+    await prisma.company.update({
+      where: { id: Number(companyId) },
+      data: {
+        evolution_auto_messages_enabled: Boolean(enabled),
+      },
+    });
+
+    return {
+      instanceName: company.evolution_instance_name,
+      status: company.evolution_connection_status || "close",
+      connectedPhone: company.evolution_connected_phone || null,
+      autoMessagesEnabled: Boolean(enabled),
+      ...this.getEvolutionPhoneValidation(
+        company.phone,
+        company.evolution_connected_phone || null,
+        company.evolution_connection_status === "open",
+      ),
     };
   }
 
@@ -603,6 +696,7 @@ export class CompanyService {
         phone: true,
         website: true,
         email: true,
+        evolution_auto_messages_enabled: true,
       },
     });
 
@@ -1242,6 +1336,48 @@ export class CompanyService {
     return where;
   }
 
+  getAppointmentTimeFilterMinutes(timeValue) {
+    if (!timeValue || typeof timeValue !== "string" || !timeValue.includes(":")) {
+      return null;
+    }
+
+    const [hours, minutes] = timeValue.split(":").map(Number);
+
+    if (
+      Number.isNaN(hours) ||
+      Number.isNaN(minutes) ||
+      hours < 0 ||
+      hours > 23 ||
+      minutes < 0 ||
+      minutes > 59
+    ) {
+      return null;
+    }
+
+    return hours * 60 + minutes;
+  }
+
+  matchesAppointmentTimeFilters(appointment, filters = {}) {
+    const startMinutes = this.getAppointmentTimeFilterMinutes(filters.timeStart);
+    const endMinutes = this.getAppointmentTimeFilterMinutes(filters.timeEnd);
+
+    if (startMinutes === null && endMinutes === null) {
+      return true;
+    }
+
+    const appointmentMinutes = this.getMinutesInTimeZone(appointment.start_time);
+
+    if (startMinutes !== null && appointmentMinutes < startMinutes) {
+      return false;
+    }
+
+    if (endMinutes !== null && appointmentMinutes > endMinutes) {
+      return false;
+    }
+
+    return true;
+  }
+
   async getAppointments(id, page = 1, limit = 50, filters = {}) {
     const hasFilter = Boolean(
       filters.id ||
@@ -1255,8 +1391,39 @@ export class CompanyService {
       filters.timeEnd
     );
     const where = this.buildAppointmentFiltersWhere(id, filters);
+    const shouldFilterByTimeOnlyInMemory =
+      !filters.date && (filters.timeStart || filters.timeEnd);
 
     page = hasFilter ? 1 : Number(page);
+
+    if (shouldFilterByTimeOnlyInMemory) {
+      const appointments = await prisma.appointment.findMany({
+        where,
+        orderBy: { start_time: "desc" },
+        include: {
+          client: true,
+          service: true,
+          employee: true,
+        },
+      });
+
+      const filteredAppointments = appointments.filter((appointment) =>
+        this.matchesAppointmentTimeFilters(appointment, filters),
+      );
+      const total = filteredAppointments.length;
+      const paginatedAppointments = filteredAppointments.slice(
+        (page - 1) * Number(limit),
+        page * Number(limit),
+      );
+
+      return {
+        data: paginatedAppointments,
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      };
+    }
 
     const [appointments, total] = await Promise.all([
       prisma.appointment.findMany({
@@ -1285,8 +1452,7 @@ export class CompanyService {
 
   async exportAppointments(id, filters = {}) {
     const where = this.buildAppointmentFiltersWhere(id, filters);
-
-    return prisma.appointment.findMany({
+    const appointments = await prisma.appointment.findMany({
       where,
       orderBy: { start_time: "desc" },
       include: {
@@ -1295,6 +1461,14 @@ export class CompanyService {
         employee: true,
       },
     });
+
+    if (!filters.date && (filters.timeStart || filters.timeEnd)) {
+      return appointments.filter((appointment) =>
+        this.matchesAppointmentTimeFilters(appointment, filters),
+      );
+    }
+
+    return appointments;
   }
 
   async getServices(id) {
@@ -2045,6 +2219,7 @@ export class CompanyService {
         evolution_instance_name: true,
         evolution_connection_status: true,
         evolution_connected_phone: true,
+        evolution_auto_messages_enabled: true,
       },
     });
 
@@ -2087,6 +2262,7 @@ export class CompanyService {
         instanceName: company.evolution_instance_name,
         status: currentState,
         profilePictureUrl: currentProfilePictureUrl,
+        autoMessagesEnabled: company.evolution_auto_messages_enabled,
         ...validation,
       },
     };

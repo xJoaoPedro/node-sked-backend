@@ -590,22 +590,7 @@ export class WhatsAppAppointmentAssistantService {
       return true
     }
 
-    return [
-      "scheduling",
-      "cancellation",
-      "reschedule",
-      "appointment_lookup",
-      "payment",
-      "amenities",
-      "service_info",
-      "professional_info",
-      "professional_schedule",
-      "restart",
-      "no_scheduling",
-      "affirmative",
-      "negative",
-      "conversation_continuation",
-    ].includes(normalizedIntent) || this.inferLocalIntent(message, previousState) === "conversation_continuation"
+    return false
   }
 
   findServiceByHint(hint = "", services = []) {
