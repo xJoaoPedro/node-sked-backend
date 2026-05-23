@@ -1,5 +1,6 @@
 import { Server } from "socket.io";
 import { socketAuth } from "./utils/authenticators/socket.authenticator.js";
+import { buildCorsOptions } from "./utils/cors.js";
 
 let io;
 
@@ -33,11 +34,13 @@ const emitWithOptionalExclusion = (operator, excludedSocketId, eventName, payloa
 
 const socketServer = {
   init: (server) => {
+    const corsOptions = buildCorsOptions();
+
     io = new Server(server, {
       cors: {
-        origin: process.env.CORS_URL || "*",
+        origin: corsOptions.origin,
         methods: ["GET", "POST", "PATCH", "DELETE"],
-        credentials: true,
+        credentials: corsOptions.credentials,
       },
     });
 
