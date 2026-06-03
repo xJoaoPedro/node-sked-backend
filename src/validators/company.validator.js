@@ -27,6 +27,7 @@ const companySchema = z.object({
   email:         z.email().max(255),
   password:      z.string().min(6).max(30),
   phone:         z.string().min(10).max(11),
+  approved:      z.boolean().optional(),
   photo:         z.string().max(255).nullable().optional(),
   website:       z.url().max(255).nullable().optional(),
   accepted_payment_methods: paymentMethodsSchema,

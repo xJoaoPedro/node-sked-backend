@@ -1,0 +1,2 @@
+ALTER TABLE "companies"
+ADD COLUMN "approved" BOOLEAN NOT NULL DEFAULT false;
