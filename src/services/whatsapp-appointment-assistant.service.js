@@ -19,6 +19,10 @@ function normalizeText(value = "") {
   return expandCommonAbbreviations(normalized)
 }
 
+function isNumericToken(value = "") {
+  return /^\d+$/.test(String(value).trim())
+}
+
 function expandCommonAbbreviations(value = "") {
   const replacements = [
     [/\bvcs?\b/g, "voce"],
@@ -354,6 +358,23 @@ export class WhatsAppAppointmentAssistantService {
     ])
   }
 
+  isGreetingIntent(message = "") {
+    const normalized = normalizeText(message)
+
+    return [
+      "oi",
+      "ola",
+      "olá",
+      "bom dia",
+      "boa tarde",
+      "boa noite",
+      "e ai",
+      "iae",
+      "hey",
+      "opa",
+    ].includes(normalized)
+  }
+
   isPaymentIntent(message = "") {
     return includesAnyNormalizedTerm(message, [
       "pagamento",
@@ -600,6 +621,7 @@ export class WhatsAppAppointmentAssistantService {
 
     if (this.isHumanHandoffIntent(message)) return "human_handoff"
     if (this.isBotResumeIntent(message)) return "bot_resume"
+    if (this.isGreetingIntent(message)) return "greeting"
     if (this.isRestartIntent(message)) return "restart"
     if (this.isNoSchedulingIntent(message)) return "no_scheduling"
     if (this.isCancellationIntent(message)) return "cancellation"
@@ -766,7 +788,9 @@ export class WhatsAppAppointmentAssistantService {
       .map((professional) => {
         const name = normalizeText(professional.name)
         const role = normalizeText(professional.role || "")
-        const tokens = [...new Set(name.split(/\s+/).filter((token) => token.length >= 2))]
+        const tokens = [...new Set(
+          name.split(/\s+/).filter((token) => token.length >= 2 && !isNumericToken(token)),
+        )]
         const aliases = this.buildProfessionalAliases(professional)
         let score = 0
 
@@ -835,17 +859,21 @@ export class WhatsAppAppointmentAssistantService {
     if (parts.length === 0) return []
 
     const first = parts[0]
-    aliases.push(first)
+    if (!isNumericToken(first)) {
+      aliases.push(first)
+    }
 
-    if (first.length >= 2) {
+    if (!isNumericToken(first) && first.length >= 2) {
       aliases.push(first.slice(0, 2))
     }
 
-    if (first.length >= 3) {
+    if (!isNumericToken(first) && first.length >= 3) {
       aliases.push(first.slice(0, 3))
     }
 
     parts.forEach((part) => {
+      if (isNumericToken(part)) return
+
       aliases.push(part)
 
       if (part.length >= 2) aliases.push(part.slice(0, 2))
@@ -1903,8 +1931,18 @@ export class WhatsAppAppointmentAssistantService {
     const explicitServiceFromMessage = serviceCandidatesFromMessage.length === 1
       ? serviceCandidatesFromMessage[0].service
       : null
+    const serviceOptionFromState =
+      previousState?.phase === "awaiting_service"
+        ? previousState?.serviceOptions?.[
+            this.extractOptionIndex(messageText, previousState?.serviceOptions?.length || 0)
+          ] || null
+        : null
     const selectedProfessionalFromMessage = interpretedProfessional || explicitProfessionalFromMessage || currentProfessional
-    const selectedServiceFromMessage = interpretedService || explicitServiceFromMessage || currentService
+    const selectedServiceFromMessage =
+      interpretedService ||
+      explicitServiceFromMessage ||
+      serviceOptionFromState ||
+      currentService
     const openAppointments = await this.getOpenAppointmentsForCustomer(company.id, customer.id)
 
     if (serviceOptions.length === 0) {
@@ -1941,6 +1979,20 @@ export class WhatsAppAppointmentAssistantService {
           },
         )
       }
+
+      return this.buildStructuredReply(
+        "select_appointment_to_cancel",
+        { appointments: previousState?.appointmentOptions || [] },
+        {
+          fallbackText: this.buildSelectAppointmentToCancelReply(customer.name, previousState?.appointmentOptions || []),
+          interactionType: "CANCELLATION",
+          interactionStatus: "IN_PROGRESS",
+          conversationState: this.buildStatePayload({
+            phase: "awaiting_cancel_selection",
+            appointmentOptions: previousState?.appointmentOptions || [],
+          }),
+        },
+      )
     }
 
     if (previousState?.phase === "awaiting_cancel_confirmation") {
@@ -1975,6 +2027,22 @@ export class WhatsAppAppointmentAssistantService {
           },
         )
       }
+
+      return this.buildStructuredReply(
+        "cancel_confirmation",
+        { appointment: previousState?.targetAppointment || null },
+        {
+          fallbackText: previousState?.targetAppointment
+            ? this.buildCancelConfirmationReply(customer.name, previousState.targetAppointment)
+            : "Se quiser cancelar, me responda com 'sim'. Se preferir manter como está, me diga 'não'.",
+          interactionType: "CANCELLATION",
+          interactionStatus: "IN_PROGRESS",
+          conversationState: this.buildStatePayload({
+            phase: "awaiting_cancel_confirmation",
+            targetAppointment: previousState?.targetAppointment || null,
+          }),
+        },
+      )
     }
 
     if (previousState?.phase === "awaiting_reschedule_selection") {
@@ -2002,54 +2070,28 @@ export class WhatsAppAppointmentAssistantService {
           },
         )
       }
-    }
-
-    if (selectedProfessionalFromMessage && !selectedServiceFromMessage && schedulingIntent) {
-      const professionalServices = await this.getServicesForProfessional(company.id, selectedProfessionalFromMessage.id)
-
-      if (professionalServices.length === 0) {
-        return this.buildStructuredReply(
-          "no_services_for_professional",
-          {
-            professionalName: selectedProfessionalFromMessage.name,
-          },
-          {
-            fallbackText: this.buildNoServicesForProfessionalReply(
-              customer.name,
-              selectedProfessionalFromMessage,
-            ),
-            interactionType: "INQUIRY",
-            interactionStatus: "OTHER",
-            conversationState: this.buildStatePayload({ phase: "idle" }),
-          },
-        )
-      }
 
       return this.buildStructuredReply(
-        "ask_service_with_professional",
+        "select_appointment_to_reschedule",
+        { appointments: previousState?.appointmentOptions || [] },
         {
-          professionalName: selectedProfessionalFromMessage.name,
-          services: professionalServices.slice(0, 5),
-        },
-        {
-          fallbackText: this.buildAskServiceWithProfessionalReply(
-            customer.name,
-            selectedProfessionalFromMessage,
-            professionalServices,
-          ),
-          interactionType: "APPOINTMENT",
+          fallbackText: this.buildSelectAppointmentToRescheduleReply(customer.name, previousState?.appointmentOptions || []),
+          interactionType: "REAPPOINTMENT",
           interactionStatus: "IN_PROGRESS",
           conversationState: this.buildStatePayload({
-            phase: "awaiting_service",
-            employeeId: selectedProfessionalFromMessage.id,
-            employeeName: selectedProfessionalFromMessage.name,
-            serviceOptions: professionalServices.slice(0, 5),
+            phase: "awaiting_reschedule_selection",
+            appointmentOptions: previousState?.appointmentOptions || [],
           }),
         },
       )
     }
 
-    if (interpretedIntent === "restart" || this.isRestartIntent(messageText)) {
+    if (
+      interpretedIntent === "greeting" ||
+      this.isGreetingIntent(messageText) ||
+      interpretedIntent === "restart" ||
+      this.isRestartIntent(messageText)
+    ) {
       return this.buildStructuredReply(
         "restart_flow",
         { services: serviceOptions.slice(0, 5) },
@@ -2100,19 +2142,6 @@ export class WhatsAppAppointmentAssistantService {
           interactionType: "INQUIRY",
           interactionStatus: "IN_PROGRESS",
           conversationState: previousState || this.buildStatePayload({ phase: "idle" }),
-        },
-      )
-    }
-
-    if (interpretedIntent === "appointment_lookup" || this.isAppointmentLookupIntent(messageText)) {
-      return this.buildStructuredReply(
-        "open_appointments",
-        { appointments: openAppointments },
-        {
-          fallbackText: this.buildOpenAppointmentsReply(customer.name, openAppointments),
-          interactionType: "INQUIRY",
-          interactionStatus: "IN_PROGRESS",
-          conversationState: this.buildStatePayload({ phase: "idle" }),
         },
       )
     }
@@ -2206,6 +2235,64 @@ export class WhatsAppAppointmentAssistantService {
           conversationState: this.buildStatePayload({
             phase: "awaiting_reschedule_selection",
             appointmentOptions: openAppointments,
+          }),
+        },
+      )
+    }
+
+    if (interpretedIntent === "appointment_lookup" || this.isAppointmentLookupIntent(messageText)) {
+      return this.buildStructuredReply(
+        "open_appointments",
+        { appointments: openAppointments },
+        {
+          fallbackText: this.buildOpenAppointmentsReply(customer.name, openAppointments),
+          interactionType: "INQUIRY",
+          interactionStatus: "IN_PROGRESS",
+          conversationState: this.buildStatePayload({ phase: "idle" }),
+        },
+      )
+    }
+
+    if (selectedProfessionalFromMessage && !selectedServiceFromMessage && schedulingIntent) {
+      const professionalServices = await this.getServicesForProfessional(company.id, selectedProfessionalFromMessage.id)
+
+      if (professionalServices.length === 0) {
+        return this.buildStructuredReply(
+          "no_services_for_professional",
+          {
+            professionalName: selectedProfessionalFromMessage.name,
+          },
+          {
+            fallbackText: this.buildNoServicesForProfessionalReply(
+              customer.name,
+              selectedProfessionalFromMessage,
+            ),
+            interactionType: "INQUIRY",
+            interactionStatus: "OTHER",
+            conversationState: this.buildStatePayload({ phase: "idle" }),
+          },
+        )
+      }
+
+      return this.buildStructuredReply(
+        "ask_service_with_professional",
+        {
+          professionalName: selectedProfessionalFromMessage.name,
+          services: professionalServices.slice(0, 5),
+        },
+        {
+          fallbackText: this.buildAskServiceWithProfessionalReply(
+            customer.name,
+            selectedProfessionalFromMessage,
+            professionalServices,
+          ),
+          interactionType: "APPOINTMENT",
+          interactionStatus: "IN_PROGRESS",
+          conversationState: this.buildStatePayload({
+            phase: "awaiting_service",
+            employeeId: selectedProfessionalFromMessage.id,
+            employeeName: selectedProfessionalFromMessage.name,
+            serviceOptions: professionalServices.slice(0, 5),
           }),
         },
       )
