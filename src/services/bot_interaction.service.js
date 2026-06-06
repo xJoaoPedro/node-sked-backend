@@ -4,6 +4,7 @@ import pkg from "@prisma/client";
 const { PrismaClient } = pkg;
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
+const DEFAULT_CONVERSATION_WINDOW_HOURS = 24;
 
 export class BotInteractionService {
   async findByMessageId(messageId) {
@@ -22,8 +23,10 @@ export class BotInteractionService {
     });
   }
 
-  async findLatestConversation(companyId, clientId) {
-    return prisma.botInteraction.findFirst({
+  async findLatestConversation(companyId, clientId, options = {}) {
+    const { maxAgeHours = DEFAULT_CONVERSATION_WINDOW_HOURS } = options;
+
+    const latestInteraction = await prisma.botInteraction.findFirst({
       where: {
         company_id: Number(companyId),
         client_id: Number(clientId),
@@ -32,6 +35,21 @@ export class BotInteractionService {
         created_at: "desc",
       },
     });
+
+    if (!latestInteraction) return null;
+
+    const latestInteractionTimestamp = new Date(latestInteraction.created_at).getTime();
+    const maxAgeMs = Number(maxAgeHours) * 60 * 60 * 1000;
+
+    if (!Number.isFinite(latestInteractionTimestamp) || !Number.isFinite(maxAgeMs)) {
+      return latestInteraction;
+    }
+
+    if (Date.now() - latestInteractionTimestamp > maxAgeMs) {
+      return null;
+    }
+
+    return latestInteraction;
   }
 
   async findAll() {

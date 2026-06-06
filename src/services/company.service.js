@@ -133,6 +133,19 @@ function slugify(value = "") {
 }
 
 export class CompanyService {
+  buildCompanyApprovalPayload(company) {
+    const approved = Boolean(company?.approved);
+    const status = approved ? "APPROVED" : (company?.status || "PENDING");
+    const approveDate =
+      approved ? (company?.approve_date || new Date()) : null;
+
+    return {
+      approved,
+      status,
+      approve_date: approveDate,
+    };
+  }
+
   getTimeZone() {
     return process.env.APP_TIMEZONE || "America/Sao_Paulo";
   }
@@ -791,7 +804,7 @@ export class CompanyService {
       legal_name, fantasy_name, cnpj,
       email, password, phone, photo, website, accepted_payment_methods, amenities,
       low_stock_threshold,
-      plan, status, approve_date,
+      plan,
     } = company;
 
     const existingCompanyWithPhone = await prisma.company.findFirst({
@@ -813,7 +826,8 @@ export class CompanyService {
           legal_name, fantasy_name, cnpj, email,
           password: hashedPassword, phone, photo, website, accepted_payment_methods, amenities,
           low_stock_threshold,
-          plan, status, approve_date,
+          plan,
+          ...this.buildCompanyApprovalPayload({ approved: false }),
         },
       });
     } catch (error) {
@@ -951,17 +965,91 @@ export class CompanyService {
 
     if (!valid) return res.status(401).json({ error: "Credenciais inválidas" });
 
+    const approval = this.buildCompanyApprovalPayload(company);
+
     return {
       token: jwt.sign(
         {
           company_id: company.id,
+          auth_type: "company",
+          approved: approval.approved,
+          status: approval.status,
+          approve_date: approval.approve_date,
         },
         process.env.JWT_SECRET,
         { expiresIn: "1h" },
       ),
       id: company.id,
+      approved: approval.approved,
+      status: approval.status,
+      approve_date: approval.approve_date,
+    };
+  }
 
-    } 
+  async findPendingApprovals() {
+    return prisma.company.findMany({
+      where: {
+        approved: false,
+      },
+      select: {
+        id: true,
+        legal_name: true,
+        fantasy_name: true,
+        cnpj: true,
+        email: true,
+        phone: true,
+        created_at: true,
+        approved: true,
+        status: true,
+      },
+      orderBy: {
+        created_at: "asc",
+      },
+    });
+  }
+
+  async approveCompany(id) {
+    const company = await prisma.company.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!company) return null;
+
+    return prisma.company.update({
+      where: { id },
+      data: {
+        ...this.buildCompanyApprovalPayload({ approved: true }),
+      },
+      select: {
+        id: true,
+        fantasy_name: true,
+        legal_name: true,
+        approved: true,
+        status: true,
+        approve_date: true,
+      },
+    });
+  }
+
+  async getCompanyApprovalSession(companyId) {
+    const company = await prisma.company.findUnique({
+      where: { id: Number(companyId) },
+      select: {
+        id: true,
+        approved: true,
+        status: true,
+        approve_date: true,
+      },
+    });
+
+    if (!company) return null;
+
+    return {
+      company_id: company.id,
+      auth_type: "company",
+      ...this.buildCompanyApprovalPayload(company),
+    };
   }
 
   async getAllData(id) {

@@ -84,7 +84,22 @@ export default class AuthController {
 
   async refreshSession(req, res) {
     const currentUser = req.user || {};
-    const payload = { ...currentUser };
+    let payload = { ...currentUser };
+
+    if (currentUser.auth_type === "company" || currentUser.company_id) {
+      const companySession = await companyService.getCompanyApprovalSession(currentUser.company_id);
+
+      if (!companySession) {
+        return res.status(404).json({
+          error: "Empresa não encontrada",
+        });
+      }
+
+      payload = {
+        ...payload,
+        ...companySession,
+      };
+    }
 
     delete payload.iat;
     delete payload.exp;

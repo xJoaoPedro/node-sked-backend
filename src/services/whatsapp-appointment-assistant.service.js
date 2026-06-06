@@ -19,20 +19,34 @@ function normalizeText(value = "") {
   return expandCommonAbbreviations(normalized)
 }
 
+function isNumericToken(value = "") {
+  return /^\d+$/.test(String(value).trim())
+}
+
 function expandCommonAbbreviations(value = "") {
   const replacements = [
     [/\bvcs?\b/g, "voce"],
     [/\bvc\b/g, "voce"],
+    [/\bvocee+\b/g, "voce"],
     [/\bq\b/g, "que"],
     [/\bpq\b/g, "porque"],
     [/\bpk\b/g, "porque"],
+    [/\bporq\b/g, "porque"],
     [/\bqr\b/g, "quero"],
     [/\bqro\b/g, "quero"],
     [/\bkero\b/g, "quero"],
+    [/\bqria\b/g, "queria"],
+    [/\bqd\b/g, "quando"],
+    [/\bhrs?\b/g, "horario"],
+    [/\bhr\b/g, "horario"],
+    [/\bhrs\b/g, "horario"],
     [/\bblz\b/g, "beleza"],
     [/\bmsg\b/g, "mensagem"],
     [/\bag\b/g, "agora"],
     [/\bhj\b/g, "hoje"],
+    [/\btd\b/g, "tudo"],
+    [/\bt+\s*bem\b/g, "tudo bem"],
+    [/\bamanhaa+\b/g, "amanha"],
     [/\bamanh[ae]\b/g, "amanha"],
     [/\bdsclp\b/g, "desculpa"],
     [/\bobg\b/g, "obrigado"],
@@ -45,14 +59,17 @@ function expandCommonAbbreviations(value = "") {
     [/\bpode\s+se\b/g, "pode ser"],
     [/\bpdp\b/g, "pode"],
     [/\bcmg\b/g, "comigo"],
+    [/\bctg\b/g, "contigo"],
     [/\bc\/\b/g, "com "],
     [/\bs\/\b/g, "sem "],
     [/\bhorar?io\b/g, "horario"],
     [/\bagendr\b/g, "agendar"],
     [/\bagendamnto\b/g, "agendamento"],
+    [/\bagend\b/g, "agendar"],
     [/\bmarc[ae]r\b/g, "marcar"],
     [/\bserv\b/g, "servico"],
     [/\bprof\b/g, "profissional"],
+    [/\bfunc\b/g, "funcionario"],
     [/\bcartaoo+\b/g, "cartao"],
     [/\bpixx+\b/g, "pix"],
     [/\bnaum\b/g, "nao"],
@@ -61,9 +78,16 @@ function expandCommonAbbreviations(value = "") {
     [/\bn\b/g, "nao"],
     [/\bss\b/g, "sim"],
     [/\bsimm+\b/g, "sim"],
+    [/\bvlw\b/g, "valeu"],
+    [/\bobgda\b/g, "obrigado"],
   ]
 
   return replacements.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value)
+}
+
+function includesAnyNormalizedTerm(message = "", terms = []) {
+  const normalizedMessage = normalizeText(message)
+  return terms.some((term) => normalizedMessage.includes(normalizeText(term)))
 }
 
 function pad(value) {
@@ -143,6 +167,12 @@ function startOfDay(date) {
   return value
 }
 
+function addDays(date, days) {
+  const value = new Date(date)
+  value.setDate(value.getDate() + Number(days || 0))
+  return value
+}
+
 export class WhatsAppAppointmentAssistantService {
   constructor() {
     this.appointmentService = new AppointmentService()
@@ -170,6 +200,14 @@ export class WhatsAppAppointmentAssistantService {
       "fechado",
       "isso",
       "quero",
+      "quero sim",
+      "pode confirmar",
+      "confirmado",
+      "isso mesmo",
+      "essa mesmo",
+      "esse mesmo",
+      "pode marcar",
+      "pode agendar",
     ].includes(normalized)
   }
 
@@ -184,13 +222,15 @@ export class WhatsAppAppointmentAssistantService {
       "deixa",
       "outro horario",
       "outro dia",
+      "melhor nao",
+      "agora nao",
+      "nao precisa",
+      "nao quero mais",
     ].includes(normalized)
   }
 
   isNoSchedulingIntent(message = "") {
-    const normalized = normalizeText(message)
-
-    return [
+    return includesAnyNormalizedTerm(message, [
       "nao quero agendar",
       "não quero agendar",
       "nao quero marcar",
@@ -205,13 +245,15 @@ export class WhatsAppAppointmentAssistantService {
       "so queria perguntar",
       "por enquanto nao",
       "por enquanto não",
-    ].some((term) => normalized.includes(normalizeText(term)))
+      "so estou olhando",
+      "só estou olhando",
+      "so quero ver",
+      "só quero ver",
+    ])
   }
 
   isHumanHandoffIntent(message = "") {
-    const normalized = normalizeText(message)
-
-    return [
+    return includesAnyNormalizedTerm(message, [
       "quero falar com atendente",
       "quero falar com uma pessoa",
       "quero falar com alguem",
@@ -237,13 +279,13 @@ export class WhatsAppAppointmentAssistantService {
       "sem chatbot",
       "sem robô",
       "sem robo",
-    ].some((term) => normalized.includes(normalizeText(term)))
+      "falar com pessoa real",
+      "quero atendimento humano",
+    ])
   }
 
   isBotResumeIntent(message = "") {
-    const normalized = normalizeText(message)
-
-    return [
+    return includesAnyNormalizedTerm(message, [
       "quero agendar",
       "quero marcar",
       "quero remarcar",
@@ -263,13 +305,15 @@ export class WhatsAppAppointmentAssistantService {
       "agora quero marcar",
       "me ajuda a agendar",
       "me ajuda a marcar",
-    ].some((term) => normalized.includes(normalizeText(term)))
+      "voltei aqui",
+      "vamos retomar",
+      "quero continuar",
+      "continuar atendimento",
+    ])
   }
 
   isSchedulingIntent(message = "") {
-    const normalized = normalizeText(message)
-
-    return [
+    return includesAnyNormalizedTerm(message, [
       "agendar",
       "agendamento",
       "marcar",
@@ -293,13 +337,15 @@ export class WhatsAppAppointmentAssistantService {
       "queria agendar",
       "preciso agendar",
       "quero agendar",
-    ].some((term) => normalized.includes(term))
+      "ver horario",
+      "ver disponibilidade",
+      "ter horario",
+      "encaixe",
+    ])
   }
 
   isRestartIntent(message = "") {
-    const normalized = normalizeText(message)
-
-    return [
+    return includesAnyNormalizedTerm(message, [
       "reiniciar",
       "recomecar",
       "recomecar",
@@ -307,13 +353,30 @@ export class WhatsAppAppointmentAssistantService {
       "comecar de novo",
       "voltar do inicio",
       "novo atendimento",
-    ].some((term) => normalized.includes(term))
+      "zera tudo",
+      "do zero",
+    ])
   }
 
-  isPaymentIntent(message = "") {
+  isGreetingIntent(message = "") {
     const normalized = normalizeText(message)
 
     return [
+      "oi",
+      "ola",
+      "olá",
+      "bom dia",
+      "boa tarde",
+      "boa noite",
+      "e ai",
+      "iae",
+      "hey",
+      "opa",
+    ].includes(normalized)
+  }
+
+  isPaymentIntent(message = "") {
+    return includesAnyNormalizedTerm(message, [
       "pagamento",
       "pagamentos",
       "forma de pagamento",
@@ -325,65 +388,91 @@ export class WhatsAppAppointmentAssistantService {
       "pix",
       "cartao",
       "dinheiro",
-    ].some((term) => normalized.includes(term))
+      "como posso pagar",
+      "formas de pagar",
+    ])
   }
 
   isCancellationIntent(message = "") {
-    const normalized = normalizeText(message)
-
-    return [
+    return includesAnyNormalizedTerm(message, [
+      "cancelamento",
       "cancelar agendamento",
+      "cancelar meu agendamento",
+      "cancelar meu horario",
       "cancelar horario",
       "cancelar marcacao",
       "cancelar minha reserva",
       "quero cancelar",
       "preciso cancelar",
+      "desistir do agendamento",
+      "tirar meu agendamento",
       "desmarcar",
       "nao vou conseguir ir",
       "não vou conseguir ir",
       "nao poderei ir",
       "não poderei ir",
-    ].some((term) => normalized.includes(normalizeText(term)))
+      "preciso desmarcar",
+      "quero desmarcar",
+    ])
   }
 
   isRescheduleIntent(message = "") {
-    const normalized = normalizeText(message)
-
-    return [
+    return includesAnyNormalizedTerm(message, [
+      "reagendamento",
       "reagendar",
       "remarcar",
+      "remarcacao",
+      "remarcação",
+      "mudar agendamento",
       "mudar horario",
       "mudar meu horario",
       "trocar horario",
       "trocar dia",
       "alterar agendamento",
       "alterar horario",
+      "quero remarcar",
+      "preciso remarcar",
+      "quero reagendar",
       "outro horario para meu agendamento",
-    ].some((term) => normalized.includes(normalizeText(term)))
+      "mudar minha reserva",
+      "jogar para outro dia",
+    ])
   }
 
   isAppointmentLookupIntent(message = "") {
-    const normalized = normalizeText(message)
-
-    return [
+    return includesAnyNormalizedTerm(message, [
       "meus agendamentos",
       "meu agendamento",
+      "meus horarios",
+      "meus horarios marcados",
       "tenho horario marcado",
       "tenho agendamento",
       "quais agendamentos tenho",
       "quais horarios tenho",
+      "quais horarios estao marcados",
+      "quais horarios estão marcados",
       "me fala meus horarios",
+      "me fala meus agendamentos",
       "consultar agendamento",
+      "consultar meus agendamentos",
       "ver agendamento",
+      "ver meus agendamentos",
+      "listar agendamentos",
+      "agendamentos marcados",
       "agendamentos pendentes",
       "agendamentos confirmados",
-    ].some((term) => normalized.includes(normalizeText(term)))
+      "quais agendamentos pendentes tenho",
+      "quais agendamentos confirmados tenho",
+      "tenho algum agendamento pendente",
+      "tenho algum agendamento confirmado",
+      "quero ver meus horarios",
+      "quero ver meus agendamentos",
+      "consultar meus horarios",
+    ])
   }
 
   isAmenitiesIntent(message = "") {
-    const normalized = normalizeText(message)
-
-    return [
+    return includesAnyNormalizedTerm(message, [
       "comodidade",
       "comodidades",
       "estrutura",
@@ -395,13 +484,13 @@ export class WhatsAppAppointmentAssistantService {
       "ar condicionado",
       "cafe",
       "banheiro",
-    ].some((term) => normalized.includes(term))
+      "local tem",
+      "o espaco tem",
+    ])
   }
 
   isServiceInfoIntent(message = "") {
-    const normalized = normalizeText(message)
-
-    return [
+    return includesAnyNormalizedTerm(message, [
       "valor",
       "preco",
       "preços",
@@ -423,13 +512,13 @@ export class WhatsAppAppointmentAssistantService {
       "informação do serviço",
       "detalhes do servico",
       "detalhes do serviço",
-    ].some((term) => normalized.includes(normalizeText(term)))
+      "quanto e",
+      "quanto é",
+    ])
   }
 
   isProfessionalInfoIntent(message = "") {
-    const normalized = normalizeText(message)
-
-    return [
+    return includesAnyNormalizedTerm(message, [
       "profissional",
       "profissionais",
       "quem faz",
@@ -442,13 +531,13 @@ export class WhatsAppAppointmentAssistantService {
       "quem faz esse serviço",
       "a re faz",
       "a renata faz",
-    ].some((term) => normalized.includes(normalizeText(term)))
+      "quem atende esse servico",
+      "quem atende esse serviço",
+    ])
   }
 
   isProfessionalScheduleIntent(message = "") {
-    const normalized = normalizeText(message)
-
-    return [
+    return includesAnyNormalizedTerm(message, [
       "horarios da",
       "horários da",
       "agenda da",
@@ -466,7 +555,11 @@ export class WhatsAppAppointmentAssistantService {
       "tem vaga com",
       "a re atende",
       "a renata atende",
-    ].some((term) => normalized.includes(normalizeText(term)))
+      "quando atende",
+      "que dia atende",
+      "quais horarios da",
+      "quais horarios do",
+    ])
   }
 
   wantsToChangeService(message = "", currentService = null) {
@@ -481,16 +574,38 @@ export class WhatsAppAppointmentAssistantService {
       "outro servico",
       "outro serviço",
       "prefiro outro",
+      "quero outro servico",
+      "quero outro serviço",
     ].some((term) => normalized.includes(normalizeText(term)))
 
     return mentionsChange
   }
 
   extractOptionIndex(message = "", optionsLength = 0) {
-    const match = normalizeText(message).match(/^(\d{1,2})$/)
-    if (!match) return null
+    const normalized = normalizeText(message)
+    const match = normalized.match(/(?:^|\b)(\d{1,2})(?:\b|$)/)
+    let index = null
 
-    const index = Number(match[1]) - 1
+    if (match) {
+      index = Number(match[1]) - 1
+    } else {
+      const ordinalMap = [
+        ["primeiro", 0],
+        ["primeira", 0],
+        ["segundo", 1],
+        ["segunda", 1],
+        ["terceiro", 2],
+        ["terceira", 2],
+        ["quarto", 3],
+        ["quarta", 3],
+        ["quinto", 4],
+        ["quinta", 4],
+      ]
+      const ordinalEntry = ordinalMap.find(([term]) => normalized.includes(term))
+      index = ordinalEntry ? ordinalEntry[1] : null
+    }
+
+    if (index === null) return null
     if (index < 0 || index >= optionsLength) return null
 
     return index
@@ -506,6 +621,7 @@ export class WhatsAppAppointmentAssistantService {
 
     if (this.isHumanHandoffIntent(message)) return "human_handoff"
     if (this.isBotResumeIntent(message)) return "bot_resume"
+    if (this.isGreetingIntent(message)) return "greeting"
     if (this.isRestartIntent(message)) return "restart"
     if (this.isNoSchedulingIntent(message)) return "no_scheduling"
     if (this.isCancellationIntent(message)) return "cancellation"
@@ -672,7 +788,9 @@ export class WhatsAppAppointmentAssistantService {
       .map((professional) => {
         const name = normalizeText(professional.name)
         const role = normalizeText(professional.role || "")
-        const tokens = [...new Set(name.split(/\s+/).filter((token) => token.length >= 2))]
+        const tokens = [...new Set(
+          name.split(/\s+/).filter((token) => token.length >= 2 && !isNumericToken(token)),
+        )]
         const aliases = this.buildProfessionalAliases(professional)
         let score = 0
 
@@ -741,17 +859,21 @@ export class WhatsAppAppointmentAssistantService {
     if (parts.length === 0) return []
 
     const first = parts[0]
-    aliases.push(first)
+    if (!isNumericToken(first)) {
+      aliases.push(first)
+    }
 
-    if (first.length >= 2) {
+    if (!isNumericToken(first) && first.length >= 2) {
       aliases.push(first.slice(0, 2))
     }
 
-    if (first.length >= 3) {
+    if (!isNumericToken(first) && first.length >= 3) {
       aliases.push(first.slice(0, 3))
     }
 
     parts.forEach((part) => {
+      if (isNumericToken(part)) return
+
       aliases.push(part)
 
       if (part.length >= 2) aliases.push(part.slice(0, 2))
@@ -765,20 +887,52 @@ export class WhatsAppAppointmentAssistantService {
     const normalized = normalizeText(message)
     const baseDate = startOfDay(now)
 
-    if (normalized.includes("depois de amanha")) {
-      const dayAfterTomorrow = new Date(baseDate)
-      dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2)
-      return this.toDateString(dayAfterTomorrow)
+    if (normalized.includes("depois de depois de amanha")) {
+      return this.toDateString(addDays(baseDate, 3))
+    }
+
+    if (
+      ["depois de amanha", "depois d amanha", "depois de amnh", "daqui a dois dias"].some((term) =>
+        normalized.includes(normalizeText(term)),
+      )
+    ) {
+      return this.toDateString(addDays(baseDate, 2))
+    }
+
+    if (
+      ["daqui a tres dias", "daqui tres dias"].some((term) =>
+        normalized.includes(normalizeText(term)),
+      )
+    ) {
+      return this.toDateString(addDays(baseDate, 3))
     }
 
     if (normalized.includes("hoje")) {
       return this.toDateString(baseDate)
     }
 
-    if (normalized.includes("amanha")) {
-      const tomorrow = new Date(baseDate)
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      return this.toDateString(tomorrow)
+    if (
+      ["amanha", "amanhã"].some((term) => normalized.includes(normalizeText(term)))
+    ) {
+      return this.toDateString(addDays(baseDate, 1))
+    }
+
+    if (
+      ["depois", "outro dia"].some((term) => normalized === normalizeText(term))
+    ) {
+      return this.toDateString(addDays(baseDate, 1))
+    }
+
+    if (
+      ["fim de semana", "final de semana", "no sabado", "no domingo"].some((term) =>
+        normalized.includes(normalizeText(term)),
+      )
+    ) {
+      const saturday = new Date(baseDate)
+      const currentWeekDay = saturday.getDay()
+      const distance = (6 - currentWeekDay + 7) % 7 || 7
+      saturday.setDate(saturday.getDate() + distance)
+      return this.toDateString(saturday)
     }
 
     const explicitDate = normalized.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/)
@@ -828,7 +982,14 @@ export class WhatsAppAppointmentAssistantService {
       const currentWeekDay = candidate.getDay()
       let distance = (weekDay - currentWeekDay + 7) % 7
 
-      if (distance === 0 || normalized.includes("proxima")) {
+      const asksNextWeek = [
+        "proxima",
+        "próxima",
+        "que vem",
+        "semana que vem",
+      ].some((term) => normalized.includes(normalizeText(term)))
+
+      if (distance === 0 || asksNextWeek) {
         distance = distance === 0 ? 7 : distance
       }
 
@@ -846,6 +1007,30 @@ export class WhatsAppAppointmentAssistantService {
     const contextualHourMatch = normalized.match(/\b(?:as|para|pra|por volta de|umas?)\s+(\d{1,2})\b/)
     const isolatedHourMatch = normalized.match(/^(\d{1,2})$/)
 
+    if (["meio dia", "meiodia"].some((term) => normalized.includes(normalizeText(term)))) {
+      return "12:00"
+    }
+
+    if (["meia noite"].some((term) => normalized.includes(normalizeText(term)))) {
+      return "00:00"
+    }
+
+    if (["fim da manha", "final da manha"].some((term) => normalized.includes(normalizeText(term)))) {
+      return "11:00"
+    }
+
+    if (["comeco da tarde", "inicio da tarde"].some((term) => normalized.includes(normalizeText(term)))) {
+      return "13:00"
+    }
+
+    if (["fim da tarde", "final da tarde"].some((term) => normalized.includes(normalizeText(term)))) {
+      return "17:00"
+    }
+
+    if (["comeco da noite", "inicio da noite"].some((term) => normalized.includes(normalizeText(term)))) {
+      return "18:00"
+    }
+
     let match = explicitMatch || shortHourMatch || contextualHourMatch || isolatedHourMatch
 
     if (!match) return null
@@ -861,15 +1046,55 @@ export class WhatsAppAppointmentAssistantService {
   parsePeriodFromMessage(message = "") {
     const normalized = normalizeText(message)
 
-    if (["manha", "manhã", "de manha", "de manhã", "pela manha", "pela manhã"].some((term) => normalized.includes(normalizeText(term)))) {
+    if (
+      [
+        "manha",
+        "manhã",
+        "de manha",
+        "de manhã",
+        "pela manha",
+        "pela manhã",
+        "cedo",
+        "bem cedo",
+        "no comeco da manha",
+        "no inicio da manha",
+      ].some((term) => normalized.includes(normalizeText(term)))
+    ) {
       return { key: "morning", label: "de manhã" }
     }
 
-    if (["tarde", "a tarde", "à tarde", "de tarde", "pela tarde"].some((term) => normalized.includes(normalizeText(term)))) {
+    if (
+      [
+        "tarde",
+        "a tarde",
+        "à tarde",
+        "de tarde",
+        "pela tarde",
+        "depois do almoco",
+        "depois do almoço",
+        "no comeco da tarde",
+        "no inicio da tarde",
+        "fim da tarde",
+        "final da tarde",
+      ].some((term) => normalized.includes(normalizeText(term)))
+    ) {
       return { key: "afternoon", label: "à tarde" }
     }
 
-    if (["noite", "a noite", "à noite", "de noite", "anoite", "no fim do dia"].some((term) => normalized.includes(normalizeText(term)))) {
+    if (
+      [
+        "noite",
+        "a noite",
+        "à noite",
+        "de noite",
+        "anoite",
+        "no fim do dia",
+        "fim do dia",
+        "final do dia",
+        "depois das seis",
+        "mais tarde",
+      ].some((term) => normalized.includes(normalizeText(term)))
+    ) {
       return { key: "evening", label: "à noite" }
     }
 
@@ -1706,8 +1931,18 @@ export class WhatsAppAppointmentAssistantService {
     const explicitServiceFromMessage = serviceCandidatesFromMessage.length === 1
       ? serviceCandidatesFromMessage[0].service
       : null
+    const serviceOptionFromState =
+      previousState?.phase === "awaiting_service"
+        ? previousState?.serviceOptions?.[
+            this.extractOptionIndex(messageText, previousState?.serviceOptions?.length || 0)
+          ] || null
+        : null
     const selectedProfessionalFromMessage = interpretedProfessional || explicitProfessionalFromMessage || currentProfessional
-    const selectedServiceFromMessage = interpretedService || explicitServiceFromMessage || currentService
+    const selectedServiceFromMessage =
+      interpretedService ||
+      explicitServiceFromMessage ||
+      serviceOptionFromState ||
+      currentService
     const openAppointments = await this.getOpenAppointmentsForCustomer(company.id, customer.id)
 
     if (serviceOptions.length === 0) {
@@ -1744,6 +1979,20 @@ export class WhatsAppAppointmentAssistantService {
           },
         )
       }
+
+      return this.buildStructuredReply(
+        "select_appointment_to_cancel",
+        { appointments: previousState?.appointmentOptions || [] },
+        {
+          fallbackText: this.buildSelectAppointmentToCancelReply(customer.name, previousState?.appointmentOptions || []),
+          interactionType: "CANCELLATION",
+          interactionStatus: "IN_PROGRESS",
+          conversationState: this.buildStatePayload({
+            phase: "awaiting_cancel_selection",
+            appointmentOptions: previousState?.appointmentOptions || [],
+          }),
+        },
+      )
     }
 
     if (previousState?.phase === "awaiting_cancel_confirmation") {
@@ -1778,6 +2027,22 @@ export class WhatsAppAppointmentAssistantService {
           },
         )
       }
+
+      return this.buildStructuredReply(
+        "cancel_confirmation",
+        { appointment: previousState?.targetAppointment || null },
+        {
+          fallbackText: previousState?.targetAppointment
+            ? this.buildCancelConfirmationReply(customer.name, previousState.targetAppointment)
+            : "Se quiser cancelar, me responda com 'sim'. Se preferir manter como está, me diga 'não'.",
+          interactionType: "CANCELLATION",
+          interactionStatus: "IN_PROGRESS",
+          conversationState: this.buildStatePayload({
+            phase: "awaiting_cancel_confirmation",
+            targetAppointment: previousState?.targetAppointment || null,
+          }),
+        },
+      )
     }
 
     if (previousState?.phase === "awaiting_reschedule_selection") {
@@ -1805,54 +2070,28 @@ export class WhatsAppAppointmentAssistantService {
           },
         )
       }
-    }
-
-    if (selectedProfessionalFromMessage && !selectedServiceFromMessage && schedulingIntent) {
-      const professionalServices = await this.getServicesForProfessional(company.id, selectedProfessionalFromMessage.id)
-
-      if (professionalServices.length === 0) {
-        return this.buildStructuredReply(
-          "no_services_for_professional",
-          {
-            professionalName: selectedProfessionalFromMessage.name,
-          },
-          {
-            fallbackText: this.buildNoServicesForProfessionalReply(
-              customer.name,
-              selectedProfessionalFromMessage,
-            ),
-            interactionType: "INQUIRY",
-            interactionStatus: "OTHER",
-            conversationState: this.buildStatePayload({ phase: "idle" }),
-          },
-        )
-      }
 
       return this.buildStructuredReply(
-        "ask_service_with_professional",
+        "select_appointment_to_reschedule",
+        { appointments: previousState?.appointmentOptions || [] },
         {
-          professionalName: selectedProfessionalFromMessage.name,
-          services: professionalServices.slice(0, 5),
-        },
-        {
-          fallbackText: this.buildAskServiceWithProfessionalReply(
-            customer.name,
-            selectedProfessionalFromMessage,
-            professionalServices,
-          ),
-          interactionType: "APPOINTMENT",
+          fallbackText: this.buildSelectAppointmentToRescheduleReply(customer.name, previousState?.appointmentOptions || []),
+          interactionType: "REAPPOINTMENT",
           interactionStatus: "IN_PROGRESS",
           conversationState: this.buildStatePayload({
-            phase: "awaiting_service",
-            employeeId: selectedProfessionalFromMessage.id,
-            employeeName: selectedProfessionalFromMessage.name,
-            serviceOptions: professionalServices.slice(0, 5),
+            phase: "awaiting_reschedule_selection",
+            appointmentOptions: previousState?.appointmentOptions || [],
           }),
         },
       )
     }
 
-    if (interpretedIntent === "restart" || this.isRestartIntent(messageText)) {
+    if (
+      interpretedIntent === "greeting" ||
+      this.isGreetingIntent(messageText) ||
+      interpretedIntent === "restart" ||
+      this.isRestartIntent(messageText)
+    ) {
       return this.buildStructuredReply(
         "restart_flow",
         { services: serviceOptions.slice(0, 5) },
@@ -1903,19 +2142,6 @@ export class WhatsAppAppointmentAssistantService {
           interactionType: "INQUIRY",
           interactionStatus: "IN_PROGRESS",
           conversationState: previousState || this.buildStatePayload({ phase: "idle" }),
-        },
-      )
-    }
-
-    if (interpretedIntent === "appointment_lookup" || this.isAppointmentLookupIntent(messageText)) {
-      return this.buildStructuredReply(
-        "open_appointments",
-        { appointments: openAppointments },
-        {
-          fallbackText: this.buildOpenAppointmentsReply(customer.name, openAppointments),
-          interactionType: "INQUIRY",
-          interactionStatus: "IN_PROGRESS",
-          conversationState: this.buildStatePayload({ phase: "idle" }),
         },
       )
     }
@@ -2009,6 +2235,64 @@ export class WhatsAppAppointmentAssistantService {
           conversationState: this.buildStatePayload({
             phase: "awaiting_reschedule_selection",
             appointmentOptions: openAppointments,
+          }),
+        },
+      )
+    }
+
+    if (interpretedIntent === "appointment_lookup" || this.isAppointmentLookupIntent(messageText)) {
+      return this.buildStructuredReply(
+        "open_appointments",
+        { appointments: openAppointments },
+        {
+          fallbackText: this.buildOpenAppointmentsReply(customer.name, openAppointments),
+          interactionType: "INQUIRY",
+          interactionStatus: "IN_PROGRESS",
+          conversationState: this.buildStatePayload({ phase: "idle" }),
+        },
+      )
+    }
+
+    if (selectedProfessionalFromMessage && !selectedServiceFromMessage && schedulingIntent) {
+      const professionalServices = await this.getServicesForProfessional(company.id, selectedProfessionalFromMessage.id)
+
+      if (professionalServices.length === 0) {
+        return this.buildStructuredReply(
+          "no_services_for_professional",
+          {
+            professionalName: selectedProfessionalFromMessage.name,
+          },
+          {
+            fallbackText: this.buildNoServicesForProfessionalReply(
+              customer.name,
+              selectedProfessionalFromMessage,
+            ),
+            interactionType: "INQUIRY",
+            interactionStatus: "OTHER",
+            conversationState: this.buildStatePayload({ phase: "idle" }),
+          },
+        )
+      }
+
+      return this.buildStructuredReply(
+        "ask_service_with_professional",
+        {
+          professionalName: selectedProfessionalFromMessage.name,
+          services: professionalServices.slice(0, 5),
+        },
+        {
+          fallbackText: this.buildAskServiceWithProfessionalReply(
+            customer.name,
+            selectedProfessionalFromMessage,
+            professionalServices,
+          ),
+          interactionType: "APPOINTMENT",
+          interactionStatus: "IN_PROGRESS",
+          conversationState: this.buildStatePayload({
+            phase: "awaiting_service",
+            employeeId: selectedProfessionalFromMessage.id,
+            employeeName: selectedProfessionalFromMessage.name,
+            serviceOptions: professionalServices.slice(0, 5),
           }),
         },
       )

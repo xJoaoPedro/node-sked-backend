@@ -31,6 +31,7 @@ model Company {
   email                    String                @unique @db.VarChar(255)
   password                 String                @db.VarChar(255)
   phone                    String                @unique @db.VarChar(11)
+  approved                 Boolean               @default(false)
   photo                    String?               @db.VarChar(255)
   website                  String?               @db.VarChar(255)
   accepted_payment_methods payment_method_enum[] @default([])

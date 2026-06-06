@@ -448,6 +448,7 @@ export class EvolutionAutoReplyService {
         company.id,
         customer.id,
       );
+      const isNewConversation = !latestInteraction;
       const messageInterpretation = await this.interpretAppointmentMessage({
         companyProfile,
         customerName: customer.name,
@@ -495,6 +496,7 @@ export class EvolutionAutoReplyService {
           data: {
             source: "evolution-webhook",
             event: body.event,
+            isNewConversation,
             instanceName: body.instance,
             messageId,
             remoteJid: payloadData?.key?.remoteJid || null,
@@ -547,6 +549,7 @@ export class EvolutionAutoReplyService {
           data: {
             source: "evolution-webhook",
             event: body.event,
+            isNewConversation,
             instanceName: body.instance,
             messageId,
             remoteJid: payloadData?.key?.remoteJid || null,
@@ -598,6 +601,7 @@ export class EvolutionAutoReplyService {
         data: {
           source: "evolution-webhook",
           event: body.event,
+          isNewConversation,
           instanceName: body.instance,
           messageId,
           remoteJid: payloadData?.key?.remoteJid || null,
