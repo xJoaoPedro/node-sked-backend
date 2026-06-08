@@ -1728,6 +1728,10 @@ export class WhatsAppAppointmentAssistantService {
     ].join("\n\n")
   }
 
+  buildGreetingFlowReply(customerName, services = []) {
+    return this.buildServiceOptionsReply(customerName, services)
+  }
+
   buildServiceChangeReply(customerName, services = []) {
     return [
       "Sem problema! Vamos trocar o serviço ✨",
@@ -2113,12 +2117,23 @@ export class WhatsAppAppointmentAssistantService {
       )
     }
 
-    if (
-      interpretedIntent === "greeting" ||
-      this.isGreetingIntent(messageText) ||
-      interpretedIntent === "restart" ||
-      this.isRestartIntent(messageText)
-    ) {
+    if (interpretedIntent === "greeting" || this.isGreetingIntent(messageText)) {
+      return this.buildStructuredReply(
+        "greeting_flow",
+        { services: serviceOptions.slice(0, 5) },
+        {
+          fallbackText: this.buildGreetingFlowReply(customer.name, serviceOptions),
+          interactionType: "INQUIRY",
+          interactionStatus: "IN_PROGRESS",
+          conversationState: this.buildStatePayload({
+            phase: "awaiting_service",
+            serviceOptions: serviceOptions.slice(0, 5),
+          }),
+        },
+      )
+    }
+
+    if (interpretedIntent === "restart" || this.isRestartIntent(messageText)) {
       return this.buildStructuredReply(
         "restart_flow",
         { services: serviceOptions.slice(0, 5) },
