@@ -256,7 +256,7 @@ function generateAppointment({
 // MAIN
 // ---------------------
 async function main() {
-  const password = await bcrypt.hash("123456", 10);
+  const password = await bcrypt.hash("12345aA!", 10);
   const employeeSeedUsers = [
     {
       name: "Funcionario 1",
@@ -274,6 +274,25 @@ async function main() {
       phone: "51999999993",
     },
   ];
+
+  await prisma.company.upsert({
+    where: {
+      email: "teste@teste.com",
+    },
+    update: {
+      password,
+    },
+    create: {
+      legal_name: "Teste LTDA",
+      fantasy_name: "Teste",
+      cnpj: "11111111000191",
+      email: "teste@teste.com",
+      password,
+      phone: "51999999999",
+      status: "APPROVED",
+      approved: true,
+    },
+  });
 
   // COMPANY
   const company = await prisma.company.create({

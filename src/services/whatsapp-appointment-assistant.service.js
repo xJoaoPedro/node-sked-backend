@@ -286,6 +286,17 @@ export class WhatsAppAppointmentAssistantService {
 
   isBotResumeIntent(message = "") {
     return includesAnyNormalizedTerm(message, [
+      "retornar atendimento",
+      "retorna atendimento",
+      "retomar atendimento",
+      "retoma atendimento",
+      "voltar atendimento",
+      "volta atendimento",
+      "voltar",
+      "volta",
+      "atendimento",
+      "agendamento",
+      "oi",
       "quero agendar",
       "quero marcar",
       "quero remarcar",
@@ -697,12 +708,28 @@ export class WhatsAppAppointmentAssistantService {
 
   shouldResumeFromHumanHandoff(message = "", intentCategory = "unknown", previousState = null) {
     const normalizedIntent = String(intentCategory || "unknown").trim().toLowerCase()
+    const resumeEligibleIntents = new Set([
+      "affirmative",
+      "negative",
+      "bot_resume",
+      "restart",
+      "scheduling",
+      "cancellation",
+      "reschedule",
+      "appointment_lookup",
+      "payment",
+      "amenities",
+      "service_info",
+      "professional_info",
+      "professional_schedule",
+      "conversation_continuation",
+    ])
 
     if (this.isHumanHandoffIntent(message) || normalizedIntent === "human_handoff") {
       return false
     }
 
-    if (this.isBotResumeIntent(message) || normalizedIntent === "bot_resume") {
+    if (this.isBotResumeIntent(message) || resumeEligibleIntents.has(normalizedIntent)) {
       return true
     }
 
@@ -1701,6 +1728,10 @@ export class WhatsAppAppointmentAssistantService {
     ].join("\n\n")
   }
 
+  buildGreetingFlowReply(customerName, services = []) {
+    return this.buildServiceOptionsReply(customerName, services)
+  }
+
   buildServiceChangeReply(customerName, services = []) {
     return [
       "Sem problema! Vamos trocar o serviço ✨",
@@ -2086,12 +2117,23 @@ export class WhatsAppAppointmentAssistantService {
       )
     }
 
-    if (
-      interpretedIntent === "greeting" ||
-      this.isGreetingIntent(messageText) ||
-      interpretedIntent === "restart" ||
-      this.isRestartIntent(messageText)
-    ) {
+    if (interpretedIntent === "greeting" || this.isGreetingIntent(messageText)) {
+      return this.buildStructuredReply(
+        "greeting_flow",
+        { services: serviceOptions.slice(0, 5) },
+        {
+          fallbackText: this.buildGreetingFlowReply(customer.name, serviceOptions),
+          interactionType: "INQUIRY",
+          interactionStatus: "IN_PROGRESS",
+          conversationState: this.buildStatePayload({
+            phase: "awaiting_service",
+            serviceOptions: serviceOptions.slice(0, 5),
+          }),
+        },
+      )
+    }
+
+    if (interpretedIntent === "restart" || this.isRestartIntent(messageText)) {
       return this.buildStructuredReply(
         "restart_flow",
         { services: serviceOptions.slice(0, 5) },

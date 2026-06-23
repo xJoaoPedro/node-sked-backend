@@ -46,6 +46,7 @@ export class EvolutionService {
 
     return {
       webhook: {
+        enabled: true,
         url: this.webhookUrl,
         byEvents: true,
         base64: false,

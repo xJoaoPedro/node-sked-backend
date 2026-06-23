@@ -1,3 +1,5 @@
+const BUSINESS_TIME_OFFSET = "-03:00";
+
 export function parseTimeToDate(time) {
   if (!time) return null;
 
@@ -6,11 +8,5 @@ export function parseTimeToDate(time) {
     return new Date(time);
   }
 
-  const [h, m] = time.split(':').map(Number);
-
-  const d = new Date();
-  d.setFullYear(1970, 0, 1);
-  d.setHours(h, m, 0, 0);
-
-  return d;
+  return new Date(`1970-01-01T${time}:00${BUSINESS_TIME_OFFSET}`);
 };
