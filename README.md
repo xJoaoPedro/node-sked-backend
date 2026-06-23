@@ -14,1152 +14,837 @@
 <a href="https://www.postgresql.org/download/">
 <img src="https://img.shields.io/badge/PostgreSQL-16.13.*-4169E1?logo=postgresql&logoColor=FFF" alt="Postgres 16.13.*"></a>
 
-
 ### Instalação e teste
 
-Para rodar este projeto é necessário ter um banco de dados Postgres instalado e configurado, caso você já tenha um banco configurado, pode pular esta sessão e ir direto para a <a href="#projConfig">configuração do projeto</a>.
-
-<br />
+Para rodar o backend localmente, configure um banco PostgreSQL e preencha o arquivo `.env` a partir de `.env.example`.
 
 #### Configuração do banco
 
-Para a configuração padrão, o banco utilizado é o PostgreSQL, outro banco pode ser utilizado, mas poderão ocorrer inconsistências.
+Exemplo de criação de banco e usuário:
 
-Após fazer o download do banco de acordo com a <a href="https://www.postgresql.org/download/">documentação</a>, é necessário acessá-lo para configurá-lo.
-
-Comandos de conexão:
-```
-# Windows
-psql -U postgres
-
-# Linux
-sudo -u postgres psql
-```
-
-Após, criaremos o banco:
-```
-# "bancoExemplo" será o nome do nosso banco
-CREATE DATABASE bancoExemplo;
-
-# "meuuser" será o usuário e "123456" será a senha 
+```sql
+CREATE DATABASE bancoexemplo;
 CREATE USER meuuser WITH PASSWORD '123456';
-ALTER DATABASE meubanco OWNER TO meuuser;
+ALTER DATABASE bancoexemplo OWNER TO meuuser;
 ```
 
-Com isso, temos o banco configurado!
+Valores esperados no `.env`:
 
-e devem ser colocados no .env os valores
-
-`database` - `bancoExemplo`
-
-`username` - `meuuser`
-
-`password` - `123456`
-
-`host` - `postgres`
-
-`Porta` - `5432`
-
-<br />
+- `DB_DATABASE=bancoexemplo`
+- `DB_USERNAME=meuuser`
+- `DB_PASSWORD=123456`
+- `DB_HOST=localhost`
+- `DB_PORT=5432`
+- `DATABASE_URL=postgresql://meuuser:123456@localhost:5432/bancoexemplo`
 
 <div id="projConfig">
 
 #### Configuração do projeto
 
-Após a configuração do banco, a clonagem do repositório e certificar que todos os requisitos necessários estão atendidos, você deve clonar o arquivo `.env.example`, renomear para `.env` e preencher conforme suas variáveis locais, e rodar os seguintes comandos no seu terminal:
+Depois de clonar o repositório:
+
+```bash
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run dev
+```
+
+O servidor sobe por padrão em `http://localhost:3000`, ou na porta definida em `API_PORT`.
 
 <p style="color:yellow">
-  ⚠️ Atenção: É expressamente necessário ter os endereços no .env preenchidos antes de rodar os comandos, caso contrário, terá que preencher e rodar os comandos novamente.
+  ⚠️ Atenção: a maior parte das rotas de <code>/api</code> exige JWT no header <code>Authorization: Bearer &lt;token&gt;</code>.
 </p>
 
-```
-# instalar dependências do projeto
-npm install
-
-# gerar client do prisma
-npx prisma generate
-
-# rodar migrations
-npx prisma migrate deploy
-
-```
-
-Agora com o projeto configurado, basta rodar `npm run dev`
-
-E pronto! basta acessar seu `localhost:3000` (ou a porta configurada no `.env`) nos endpoints da API para testar o projeto!
-
-<p style="color:red">
-  ⚠️ Atenção: Grande parte das rotas são protegidas com token JWT, então será necessário gerar um token e enviá-lo junto na requisição para testar.
-</p>
 </div>
 
 <br />
 
 ### Tecnologias usadas
 
-O sistema foi desenvolvido utilizando _[Node.js](https://nodejs.org/pt)_, com autenticação baseada em JSON Web Token _[(JWT)](https://www.jwt.io/)_ para controle seguro de acesso às rotas protegidas. Para a camada de persistência de dados, foi utilizado o ORM _[Prisma](https://www.prisma.io/orm)_, responsável pela comunicação com o banco de dados e mapeamento das entidades.
+O projeto usa:
 
-A aplicação segue uma arquitetura em camadas, organizada em routes, controllers, services, models e validators, garantindo uma clara separação de responsabilidades: as routes definem os endpoints, os controllers lidam com as requisições e respostas, os services concentram as regras de negócio, os models representam os dados e os validators asseguram a integridade das informações recebidas.
+- `Node.js` + `Express 5`
+- `Prisma ORM` com `PostgreSQL`
+- `JWT` para autenticação
+- `Zod` para validação
+- `Socket.IO` para eventos em tempo real
+- `Nodemailer` para formulário de contato
+- `bcrypt` para hash de senha
+- `dotenv` para carregamento de variáveis de ambiente
+- `pg` como driver PostgreSQL
+- `QRCode` para geração de QR Code da integração
+- `Anthropic API` para recursos de IA
+- integração com `Evolution API` para WhatsApp
 
 <div align="center">
 <a href="https://nodejs.org/pt"><img src="https://img.shields.io/badge/Node.js-5FA04E?logo=node.js&logoColor=FFF" alt="logo Node" height="20" /></a>
-<a href="https://www.jwt.io/"><img src="https://img.shields.io/badge/JWT-000000?logo=jsonwebtokens&logoColor=FFF" alt="logo Node" height="20" /></a>
-<a href="https://www.prisma.io/orm"><img src="https://img.shields.io/badge/Prisma-2D3748?logo=prisma&logoColor=FFF" alt="logo tailwind" height="20" /></a>
+<a href="https://expressjs.com/"><img src="https://img.shields.io/badge/Express-000000?logo=express&logoColor=FFF" alt="logo Express" height="20" /></a>
+<a href="https://www.jwt.io/"><img src="https://img.shields.io/badge/JWT-000000?logo=jsonwebtokens&logoColor=FFF" alt="logo JWT" height="20" /></a>
+<a href="https://www.prisma.io/orm"><img src="https://img.shields.io/badge/Prisma-2D3748?logo=prisma&logoColor=FFF" alt="logo Prisma" height="20" /></a>
+<a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-336791?logo=postgresql&logoColor=FFF" alt="logo PostgreSQL" height="20" /></a>
+<a href="https://zod.dev/"><img src="https://img.shields.io/badge/Zod-3E67B1?logo=zod&logoColor=FFF" alt="logo Zod" height="20" /></a>
+<a href="https://socket.io/"><img src="https://img.shields.io/badge/Socket.IO-010101?logo=socketdotio&logoColor=FFF" alt="logo Socket.IO" height="20" /></a>
+
+<a href="https://nodemailer.com/"><img src="https://img.shields.io/badge/Nodemailer-0F9D58?logo=gmail&logoColor=FFF" alt="logo Nodemailer" height="20" /></a>
+<a href="https://www.npmjs.com/package/bcrypt"><img src="https://img.shields.io/badge/Bcrypt-7952B3?logoColor=FFF" alt="logo Bcrypt" height="20" /></a>
+<a href="https://www.npmjs.com/package/dotenv"><img src="https://img.shields.io/badge/Dotenv-ECD53F?logo=dotenv&logoColor=000" alt="logo Dotenv" height="20" /></a>
+<a href="https://www.npmjs.com/package/qrcode"><img src="https://img.shields.io/badge/QRCode-222222?logoColor=FFF" alt="logo QRCode" height="20" /></a>
+<a href="https://www.anthropic.com/api"><img src="https://img.shields.io/badge/Anthropic-191919?logoColor=FFF" alt="logo Anthropic" height="20" /></a>
+<a href="https://doc.evolution-api.com/"><img src="https://img.shields.io/badge/Evolution_API-25D366?logo=whatsapp&logoColor=FFF" alt="logo Evolution API" height="20" /></a>
 </div>
 
 <br />
 
 # Models e Endpoints
 
-Os models são feitos utilizando o Prisma ORM, que pode ser configurado de acordo com a necessidade, mas a configuração padrão das models junto com seus endpoints é a seguinte:
+Os models atuais são definidos no Prisma em `prisma/schema.prisma`. Abaixo está a documentação atualizada da API com base nas rotas, validators e controllers do código.
 
-### 👤 Usuários (users)
+## Convenções da API
 
-#### Model
+### Autenticação
 
-| Campo | Tipo | Descrição | Constraints |
-| ----- | ---- | --------- | ----------- |
-| id | Int | Identificador do usuário | PK |
-| name  | String | Nome do usuário | NOT NULL |
-| email | String | Email do usuário | NOT NULL, UNIQUE |
-| password | String | Senha criptografada | NOT NULL |
-| phone | String | Telefone | NOT NULL |
-| status | enum | Status do usuário (ACTIVE, DISABLED) | NOT NULL |
-| last_login | DateTime | Último login | NULL |
-| created_at | DateTime | Data de criação | NOT NULL, DEFAUT (now()) |
-| updated_at | DateTime | Última atualização | NOT NULL, AUTO UPDATE |
+- Rotas públicas: `/auth`, `/contact`, `/webhooks/evolution`
+- Rotas protegidas: todo o namespace `/api`
+- Header JWT:
 
-#### Endpoints
+```http
+Authorization: Bearer <token>
+```
 
-<table>
-  <tr>
-    <th>Endpoint</th>
-    <th>Body</th>
-    <th>Response</th>
-  </tr>
+- Header do admin:
 
-  <tr>
-    <td><code>POST /auth/users/register</code></td>
-    <td>
-      <pre><code>{
-  "name": "Nome teste",
-  "email": "teste@teste.com",
-  "password": "123456",
-  "phone": "51999999999"
-}</code></pre>
-    </td>
-    <td>204 No Content</td>
-  </tr>
+```http
+x-admin-password: <ADMIN_PANEL_PASSWORD>
+```
 
-  <tr>
-    <td><code>POST /auth/users/login</code></td>
-    <td>
-      <pre><code>{
-  "email": "teste@teste.com",
-  "password": "123456",
-}</code></pre>
-    </td>
-    <td><pre><code>{
-	"token": "hdasjkdasjkhdfjkdshf",
-	"id": 1
-}</code></pre></td>
-  </tr>
-</table>
+### Regras de acesso
 
+- Tokens de empresa não aprovada recebem `403` em `/api` com `code: "COMPANY_APPROVAL_PENDING"`.
+- Rotas `/api/companies/:id/*` validam se o `company_id` do token bate com o `:id`.
+- Rotas que recebem `company_id` no body/query também validam acesso.
+- Rotas `/api/users/:id` só permitem acesso ao próprio usuário autenticado.
 
-<p style="color:yellow">⚠️ Protegidas por JWT</p>
+### Padrão de resposta
 
-<table>
-  <tr>
-    <th>Endpoint</th>
-    <th>Body</th>
-    <th>Response</th>
-  </tr>
-  <tr>
-    <td><code>GET /api/users</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Consulta realizada com sucesso!",
-	"data": [
-		{
-			"id": 1,
-			"name": "Nome teste",
-			"email": "teste@teste.com",
-			"password": "$2b$10$E3l.LA8dPWE0rbVSh24OtOUB",
-			"phone": "51999999999",
-			"status": "ACTIVE",
-			"last_login": null,
-			"created_at": "2026-04-16T02:25:51.374Z",
-			"updated_at": "2026-04-16T02:25:51.374Z"
-		}
-	]
-}</code></pre></td>
-  </tr>
+Sucesso com dados:
 
-  <tr>
-    <td><code>GET /api/users/:id</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Usuário encontrado com sucesso!",
-	"data": {
-		"id": 1,
-		"name": "Nome teste",
-		"email": "teste@teste.com",
-		"password": "$2b$10$E3l.LA8dPWE0rbVSh24OtOUB",
-		"phone": "51999999999",
-		"status": "ACTIVE",
-		"last_login": null,
-		"created_at": "2026-04-16T02:25:51.374Z",
-		"updated_at": "2026-04-16T02:25:51.374Z"
-	}
-}</code></pre></td>
-  </tr>
+```json
+{
+  "message": "Consulta realizada com sucesso!",
+  "data": {}
+}
+```
 
-  <tr>
-    <td><code>PATCH /api/users/:id</code></td>
-    <td>
-      <pre><code>{
-	"name": "Nome editado"
-}</code></pre>
-    </td>
-    <td>204 No Content</td>
-  </tr>
+Erro de validação:
 
-  <tr>
-    <td><code>DELETE /api/users/:id</code></td>
-    <td>No Body</td>
-    <td>204 No Content</td>
-  </tr>
-</table>
+```json
+{
+  "message": "Dados inválidos",
+  "errors": {}
+}
+```
 
-<br />
+Erros de autenticação costumam retornar:
 
-### 🏢 Empresas (companies)
+```json
+{
+  "error": "Token inválido"
+}
+```
 
-#### Model
+---
 
-| Campo | Tipo | Descrição | Constraints |
-| ----- | ---- | --------- | ----------- |
-| id | Int | Identificador da empresa | PK |
-| legal_name | String | Razão social | NOT NULL |
-| fantasy_name | String | Nome fantasia | NOT NULL |
-| cnpj | String | CNPJ da empresa | NOT NULL |
-| email | String | Email da empresa | NOT NULL, UNIQUE |
-| password | String | Senha criptografada | NOT NULL |
-| phone | String | Telefone | NULL |
-| photo | String | Foto da empresa | NULL |
-| website | String | Website da empresa | NULL |
-| accepted_payment_methods | enum[] | Formas de pagamento aceitas (PIX, CREDIT, DEBIT, CASH) | NOT NULL, DEFAULT ([]) |
-| plan |	enum |	Plano (FREE, PRO) |	NOT NULL, DEFAULT (FREE) |
-| status |	enum |	Status (PENDING, APPROVED, DENIED) |	NOT NULL, DEFAULT (PENDING) |
-| approve_date |	DateTime |	Data de aprovação |	NULL |
-| created_at | DateTime | Data de criação | NOT NULL, DEFAUT (now()) |
-| updated_at | DateTime | Última atualização | NOT NULL, AUTO UPDATE |
+## 👤 Usuários (`users`)
 
-#### Endpoints
+### Model
 
-<table>
-  <tr>
-    <th>Endpoint</th>
-    <th>Body</th>
-    <th>Response</th>
-  </tr>
-  <tr>
-    <td><code>POST /auth/companies/register</code></td>
-    <td>
-      <pre><code>{
-  "legal_name": "nome legal",
-  "fantasy_name": "nome fantasia",
-  "cnpj": "12391239123",
-  "email": "exemplo@exemplo.com",
-  "password": "123456",
-  "phone": "51998557211",
-  "photo": "https://example.com/company-photo.jpg",
-  "website": "https://empresa.com",
-  "accepted_payment_methods": ["PIX", "CREDIT"]
-}</code></pre>
-    </td>
-    <td>204 No Content</td>
-  </tr>
+| Campo | Tipo |
+| ----- | ---- |
+| `id` | Int |
+| `name` | String |
+| `email` | String |
+| `password` | String |
+| `phone` | String |
+| `status` | `ACTIVE \| DISABLED` |
+| `last_login` | DateTime nullable |
+| `created_at` | DateTime |
+| `updated_at` | DateTime |
 
-  <tr>
-    <td><code>POST /auth/companies/login</code></td>
-    <td>
-      <pre><code>{
-  "email": "exemplo@exemplo.com",
-  "password": "123456",
-}</code></pre>
-    </td>
-    <td><pre><code>{
-	"token": "dksljadsjkadkljsajkdls",
-	"id": 1
-}</code></pre></td>
-  </tr>
-</table>
+### Auth
 
-<p style="color:yellow">⚠️ Protegidas por JWT</p>
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `POST /auth/users/register` | `{ "name": "João", "email": "joao@email.com", "password": "123456", "phone": "51999999999" }` | `204 No Content` |
+| `POST /auth/users/login` | `{ "email": "joao@email.com", "password": "123456" }` | `{ "token": "...", "companyId": 1, "employeeId": 3, "role": "EMPLOYEE" }` |
+| `POST /auth/refresh` | sem body, com JWT | `{ "token": "..." }` |
 
-<table>
-  <tr>
-    <th>Endpoint</th>
-    <th>Body</th>
-    <th>Response</th>
-  </tr>
-  <tr>
-    <td><code>GET /api/companies</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Consulta realizada com sucesso!",
-	"data": [
-		{
-			"id": 1,
-			"legal_name": "nome legal",
-			"fantasy_name": "nome fantasia",
-			"cnpj": "12391239123",
-			"email": "exemplo@exemplo.com",
-			"password": "$2b$10$CC.DCPVDQ5X76go3fGXce",
-			"phone": "51998557211",
-			"photo": "https://example.com/company-photo.jpg",
-			"website": "https://empresa.com",
-			"accepted_payment_methods": ["PIX", "CREDIT"],
-			"plan": "FREE",
-			"status": "PENDING",
-			"approve_date": null,
-			"created_at": "2026-04-16T02:09:07.800Z",
-			"updated_at": "2026-04-16T02:09:07.800Z"
-		}
-	]
-}</code></pre></td>
-  </tr>
+### Endpoints protegidos
 
-  <tr>
-    <td><code>GET /api/companies/:id</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Empresa encontrada com sucesso!",
-	"data": {
-		"id": 4,
-		"legal_name": "nome legal",
-		"fantasy_name": "nome fantasia",
-		"cnpj": "12391239123",
-		"email": "exemplo@exemplo.com",
-		"password": "$2b$10$CC.DCPVDQ5X76go3fGXce",
-		"phone": "51998557211",
-		"photo": "https://example.com/company-photo.jpg",
-		"website": "https://empresa.com",
-		"accepted_payment_methods": ["PIX", "CREDIT"],
-		"plan": "FREE",
-		"status": "PENDING",
-		"approve_date": null,
-		"created_at": "2026-04-16T02:09:07.800Z",
-		"updated_at": "2026-04-16T02:09:07.800Z"
-	}
-}</code></pre></td>
-  </tr>
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `GET /api/users` | sem body | lista de usuários sem senha |
+| `GET /api/users/:id` | sem body | usuário sem senha |
+| `PATCH /api/users/:id` | qualquer campo de usuário | `204 No Content` |
+| `DELETE /api/users/:id` | sem body | `204 No Content` |
 
-  <tr>
-    <td><code>GET /api/companies/:id/data</code></td>
-    <td>No Body</td>
-    <td><pre><code>//// atualizar com a response certa</code></pre></td>
-  </tr>
+Exemplo de retorno:
 
-  <tr>
-    <td><code>PATCH /api/companies/:id</code></td>
-    <td>
-      <pre><code>{
-	"legal_name": "Nome legal editado"
-}</code></pre>
-    </td>
-    <td>204 No Content</td>
-  </tr>
-
-  <tr>
-    <td><code>DELETE /api/companies/:id</code></td>
-    <td>No Body</td>
-    <td>204 No Content</td>
-  </tr>
-</table>
-<br />
-
-### 🔗 Empresas-Usuários (companies_users)
-Tabela pivô de usuários e empresas (cadastro de funcionários)
-
-#### Model
-
-| Campo | Tipo | Descrição | Constraints |
-| ----- | ---- | --------- | ----------- |
-| id |	Int |	Identificador |	PK |
-| company_id |	Int |	Empresa vinculada |	FK, NOT NULL |
-| user_id |	Int |	Usuário vinculado |	FK, NOT NULL |
-| role |	enum |	Papel (MANAGER, EMPLOYEE) |	NOT NULL |
-| status |	enum |	Status (ACTIVE, DISABLED) |	NOT NULL, DEFAULT (ACTIVE) |
-| created_at | DateTime | Data de criação | NOT NULL, DEFAUT (now()) |
-| updated_at | DateTime | Última atualização | NOT NULL, AUTO UPDATE |
-
-Constraints compostas:
-* UNIQUE (company_id, user_id)
-
-#### Endpoints
-
-<p style="color:yellow">⚠️ Protegidas por JWT</p>
-
-<table>
-  <tr>
-    <th>Endpoint</th>
-    <th>Body</th>
-    <th>Response</th>
-  </tr>
-  <tr>
-    <td><code>GET /api/companies-users</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Consulta realizada com sucesso!",
-	"data": [
-		{
-			"id": 1,
-			"company_id": 1,
-			"user_id": 1,
-			"role": "MANAGER",
-			"status": "ACTIVE",
-			"created_at": "2026-03-10T23:40:48.565Z",
-			"updated_at": "2026-03-10T23:40:48.565Z"
-		}
-	]
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>GET /api/companies-users/:id</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Funcionário encontrado com sucesso!",
-	"data": {
-		"id": 1,
-		"company_id": 1,
-		"user_id": 1,
-		"role": "MANAGER",
-		"status": "ACTIVE",
-		"created_at": "2026-04-13T21:58:46.432Z",
-		"updated_at": "2026-04-13T21:58:46.432Z"
-	}
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>POST /api/companies-users</code></td>
-    <td><pre><code>{
-	"company_id": "1",
-	"user_id": "4",
-	"role": "EMPLOYEE"
-}</code></pre></td>
-    <td>204 No Content</td>
-  </tr>
-
-  <tr>
-    <td><code>PATCH /api/companies-users/:id</code></td>
-    <td>
-      <pre><code>{
-	"role": "EMPLOYEE"
-}</code></pre>
-    </td>
-    <td>204 No Content</td>
-  </tr>
-
-  <tr>
-    <td><code>DELETE /api/companies-users/:id</code></td>
-    <td>No Body</td>
-    <td>204 No Content</td>
-  </tr>
-</table>
-<br />
-
-### 📍 Endereços (addresses)
-
-#### Model
-
-| Campo | Tipo | Descrição | Constraints |
-| ----- | ---- | --------- | ----------- |
-| id |	Int |	Identificador |	PK |
-| company_id |	Int |	Empresa |	FK, NOT NULL |
-| cep |	String |	CEP |	NOT NULL |
-| street |	String |	Rua |	NOT NULL |
-| number |	String |	Número de endereço |	NOT NULL |
-| complement |	String |	Complemento |	NULL |
-| neighborhood |	String |	Bairro |	NOT NULL |
-| city |	String |	Cidade |	NOT NULL |
-| state |	String |	Estado |	NOT NULL |
-
-
-#### Endpoints
-
-<p style="color:yellow">⚠️ Protegidas por JWT</p>
-
-<table>
-  <tr>
-    <th>Endpoint</th>
-    <th>Body</th>
-    <th>Response</th>
-  </tr>
-  <tr>
-    <td><code>GET /api/addresses</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Consulta realizada com sucesso!",
-	"data": [
-		{
-			"id": 1,
-			"company_id": 1,
-			"cep": "95555000",
-			"street": "Rua teste",
-			"number": "0041",
-			"complement": null,
-			"neighborhood": "Centro",
-			"city": "Cidade teste",
-			"state": "RJ",
-			"created_at": "2026-04-16T21:49:25.074Z",
-			"updated_at": "2026-04-16T21:49:25.074Z"
-		}
-	]
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>GET /api/addresses/:id</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Endereço encontrado com sucesso!",
-	"data": {
-		"id": 1,
-		"company_id": 1,
-		"cep": "95555000",
-		"street": "Rua teste",
-		"number": "0041",
-		"complement": null,
-		"neighborhood": "Centro",
-		"city": "Cidade teste",
-		"state": "RJ",
-		"created_at": "2026-04-16T21:49:25.074Z",
-		"updated_at": "2026-04-16T21:49:25.074Z"
-	}
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>POST /api/addresses</code></td>
-    <td><pre><code>{
-	"company_id": "1",
-	"cep": "95555000",
-	"street": "Rua teste",
-	"number": "0041",
-	"neighborhood": "Centro",
-	"city": "Cidade teste",
-	"state": "RJ"
-}</code></pre></td>
-    <td>204 No Content</td>
-  </tr>
-
-  <tr>
-    <td><code>PATCH /api/addresses/:id</code></td>
-    <td>
-      <pre><code>{
-	"cep": "55555999"
-}</code></pre>
-    </td>
-    <td>204 No Content</td>
-  </tr>
-
-  <tr>
-    <td><code>DELETE /api/addresses/:id</code></td>
-    <td>No Body</td>
-    <td>204 No Content</td>
-  </tr>
-</table>
-<br />
-
-### 🕒 Aberturas de agenda (schedule_openings)
-Utilizada para configurar os horários disponíveis de funcionários
-
-#### Model
-
-| Campo | Tipo | Descrição | Constraints |
-| ----- | ---- | --------- | ----------- |
-| id |	Int |	Identificador |	PK |
-| company_id |	Int |	Empresa |	FK, NOT NULL |
-| employee_id |	Int |	Funcionário |	FK, NOT NULL |
-| week_day |	Int |	Dia da semana (0=Domingo ... 6=Sábado) |	NOT NULL |
-| start_time |	Time |	Hora de início |	NOT NULL |
-| end_time |	Time |	Hora de fim |	NOT NULL |
-| created_at | DateTime | Data de criação | NOT NULL, DEFAUT (now()) |
-| updated_at | DateTime | Última atualização | NOT NULL, AUTO UPDATE |
-
-#### Endpoints
-
-<p style="color:yellow">⚠️ Protegidas por JWT</p>
-
-<table>
-  <tr>
-    <th>Endpoint</th>
-    <th>Body</th>
-    <th>Response</th>
-  </tr>
-  <tr>
-    <td><code>GET /api/schedule-openings</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Consulta realizada com sucesso!",
-	"data": [
-		{
-			"id": 1,
-			"company_id": 1,
-			"employee_id": 1,
-			"week_day": 0,
-			"start_time": "1970-01-01T11:00:00.000Z",
-			"end_time": "1970-01-01T16:30:00.000Z",
-			"created_at": "2026-04-16T21:54:06.605Z",
-			"updated_at": "2026-04-16T21:54:06.605Z"
-		}
-	]
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>GET /api/schedule-openings/:id</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Abertura de agenda encontrada com sucesso!",
-	"data": {
-		"id": 1,
-		"company_id": 1,
-		"employee_id": 1,
-		"week_day": 0,
-		"start_time": "1970-01-01T11:00:00.000Z",
-		"end_time": "1970-01-01T16:30:00.000Z",
-		"created_at": "2026-04-16T21:54:06.605Z",
-		"updated_at": "2026-04-16T21:54:06.605Z"
-	}
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>POST /api/schedule-openings</code></td>
-    <td><pre><code>{
-	"company_id": "1",
-	"employee_id": "1",
-	"week_day": "0",
-	"start_time": "08:00",
-	"end_time": "13:30"
-}</code></pre></td>
-    <td>204 No Content</td>
-  </tr>
-
-  <tr>
-    <td><code>PATCH /api/schedule-openings/:id</code></td>
-    <td>
-      <pre><code>{
-	"start_time": "09:00"
-}</code></pre>
-    </td>
-    <td>204 No Content</td>
-  </tr>
-
-  <tr>
-    <td><code>DELETE /api/schedule-openings/:id</code></td>
-    <td>No Body</td>
-    <td>204 No Content</td>
-  </tr>
-</table>
-<br />
-
-### 🚫 Bloqueios de agenda (schedule_blocks)
-Utilizada para configurar os horários bloqueados de funcionários
-
-#### Model
-
-| Campo | Tipo | Descrição | Constraints |
-| ----- | ---- | --------- | ----------- |
-| id |	Int |	Identificador |	PK |
-| company_id |	Int |	Empresa |	FK, NOT NULL |
-| employee_id |	Int |	Funcionário |	FK, NOT NULL |
-| start_time |	DateTime |	Início do bloqueio |	NOT NULL |
-| end_time |	DateTime |	Fim do bloqueio |	NULL |
-| reason |	String |	Motivo do bloqueio |	NOT NULL |
-| created_at | DateTime | Data de criação | NOT NULL, DEFAUT (now()) |
-| updated_at | DateTime | Última atualização | NOT NULL, AUTO UPDATE |
-
-#### Endpoints
-
-<p style="color:yellow">⚠️ Protegidas por JWT</p>
-
-<table>
-  <tr>
-    <th>Endpoint</th>
-    <th>Body</th>
-    <th>Response</th>
-  </tr>
-  <tr>
-    <td><code>GET /api/schedule-blocks</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Consulta realizada com sucesso!",
-	"data": [
-		{
-			"id": 1,
-			"company_id": 1,
-			"employee_id": 1,
-			"start_time": "2026-03-11T08:00:00.000Z",
-			"end_time": "2026-03-11T13:30:00.000Z",
-			"reason": "Consulta médica",
-			"created_at": "2026-04-16T22:04:45.387Z",
-			"updated_at": "2026-04-16T22:04:45.387Z"
-		}
-	]
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>GET /api/schedule-blocks/:id</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Bloqueio de agenda encontrado com sucesso!",
-	"data": {
-		"id": 1,
-		"company_id": 1,
-		"employee_id": 1,
-		"start_time": "2026-03-11T08:00:00.000Z",
-		"end_time": "2026-03-11T13:30:00.000Z",
-		"reason": "Consulta médica",
-		"created_at": "2026-04-16T22:04:45.387Z",
-		"updated_at": "2026-04-16T22:04:45.387Z"
-	}
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>POST /api/schedule-blocks</code></td>
-    <td><pre><code>{
-	"company_id": "1",
-	"employee_id": "1",
-	"start_time": "2026-03-11T08:00:00.000Z",
-  "end_time": "2026-03-11T13:30:00.000Z",
-	"reason": "Consulta médica"
-}</code></pre></td>
-    <td>204 No Content</td>
-  </tr>
-
-  <tr>
-    <td><code>PATCH /api/schedule-blocks/:id</code></td>
-    <td>
-      <pre><code>{
-	"reason": "Sem motivo aparente"
-}</code></pre>
-    </td>
-    <td>204 No Content</td>
-  </tr>
-
-  <tr>
-    <td><code>DELETE /api/schedule-blocks/:id</code></td>
-    <td>No Body</td>
-    <td>204 No Content</td>
-  </tr>
-</table>
-<br />
-
-### 💼 Serviços (services)
-
-#### Model
-
-| Campo | Tipo | Descrição | Constraints |
-| ----- | ---- | --------- | ----------- |
-| id |	Int |	Identificador |	PK |
-| company_id |	Int |	Empresa |	FK, NOT NULL |
-| name |	String |	Nome do serviço |	NOT NULL |
-| description |	String |	Descrição |	NULL |
-| duration_minutes |	Int |	Duração em minutos |	NOT NULL |
-| price |	Decimal |	Preço |	NOT NULL |
-| status |	enum |	Status (ACTIVE, DISABLED) |	NOT NULL, DEFAULT (ACTIVE) |
-| created_at | DateTime | Data de criação | NOT NULL, DEFAUT (now()) |
-| updated_at | DateTime | Última atualização | NOT NULL, AUTO UPDATE |
-
-#### Endpoints
-
-<p style="color:yellow">⚠️ Protegidas por JWT</p>
-
-<table>
-  <tr>
-    <th>Endpoint</th>
-    <th>Body</th>
-    <th>Response</th>
-  </tr>
-  <tr>
-    <td><code>GET /api/services</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Consulta realizada com sucesso!",
-	"data": [
-		{
-			"id": 1,
-			"company_id": 1,
-			"name": "Corte de cabelo",
-			"description": null,
-			"duration_minutes": 30,
-			"price": "50",
-			"status": "ACTIVE",
-			"created_at": "2026-04-13T21:58:46.449Z",
-			"updated_at": "2026-04-13T21:58:46.449Z"
-		}
-	]
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>GET /api/services/:id</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Serviço encontrado com sucesso!",
-	"data": {
-		"id": 1,
-		"company_id": 1,
-		"name": "Corte de cabelo",
-		"description": null,
-		"duration_minutes": 30,
-		"price": "50",
-		"status": "ACTIVE",
-		"created_at": "2026-04-13T21:58:46.449Z",
-		"updated_at": "2026-04-13T21:58:46.449Z"
-	}
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>POST /api/services</code></td>
-    <td><pre><code>{
-	"company_id": "1",
-	"name": "serviço teste",
-  "duration_minutes": "30",
-	"price": "149.99"
-}</code></pre></td>
-    <td>204 No Content</td>
-  </tr>
-
-  <tr>
-    <td><code>PATCH /api/services/:id</code></td>
-    <td>
-      <pre><code>{
-	"name": "Serviço com novo nome"
-}</code></pre>
-    </td>
-    <td>204 No Content</td>
-  </tr>
-
-  <tr>
-    <td><code>DELETE /api/services/:id</code></td>
-    <td>No Body</td>
-    <td>204 No Content</td>
-  </tr>
-</table>
-<br />
-
-### 📅 Agendamentos (appointments)
-
-#### Model
-
-| Campo | Tipo | Descrição | Constraints |
-| ----- | ---- | --------- | ----------- |
-| id |	Int |	Identificador |	PK |
-| company_id |	Int |	Empresa |	FK, NOT NULL |
-| service_id |	Int |	Serviço |	FK, NOT NULL |
-| employee_id |	Int |	Funcionário |	FK, NOT NULL |
-| client_id |	Int |	Cliente |	FK, NOT NULL |
-| start_time |	DateTime |	Início do atendimento	| NOT NULL |
-| end_time |	DateTime |	Fim do atendimento |	NOT NULL |
-| observations |	String |	Observações |	NULL |
-| status |	enum |	Status (PENDING, CONFIRMED, COMPLETED, CANCELED, NO_SHOW) |	NOT NULL, DEFAULT (PENDING) |
-| created_at | DateTime | Data de criação | NOT NULL, DEFAUT (now()) |
-| updated_at | DateTime | Última atualização | NOT NULL, AUTO UPDATE |
-
-#### Endpoints
-
-<p style="color:yellow">⚠️ Protegidas por JWT</p>
-
-<table>
-  <tr>
-    <th>Endpoint</th>
-    <th>Body</th>
-    <th>Response</th>
-  </tr>
-  <tr>
-    <td><code>GET /api/appointments</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Consulta realizada com sucesso!",
-	"data": [
-		{
-			"id": 1,
-			"company_id": 1,
-			"service_id": 1,
-			"employee_id": 1,
-			"client_id": 1,
-			"start_time": "2026-03-12T10:00:00.000Z",
-			"end_time": "2026-03-12T11:30:00.000Z",
-			"observations": null,
-			"status": "PENDING",
-			"created_at": "2026-03-12T23:24:36.737Z",
-			"updated_at": "2026-03-12T23:24:36.737Z"
-		}
-	]
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>GET /api/appointments/:id</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Agendamento encontrado com sucesso!",
-	"data": {
-		"id": 4,
-		"company_id": 1,
-		"service_id": 4,
-		"employee_id": 2,
-		"client_id": 4,
-		"start_time": "2025-12-30T14:58:46.461Z",
-		"end_time": "2025-12-30T16:58:46.461Z",
-		"observations": null,
-		"status": "COMPLETED",
-		"created_at": "2026-04-13T21:58:46.594Z",
-		"updated_at": "2026-04-13T21:58:46.594Z"
-	}
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>POST /api/appointments</code></td>
-    <td><pre><code>{
-	"company_id": "1",
-	"service_id": "2",
-	"employee_id": "1",
-	"client_id": "3",
-	"start_time": "2026-03-12T10:00:00Z",
-  "end_time": "2026-03-12T11:30:00Z"
-}</code></pre></td>
-    <td>204 No Content</td>
-  </tr>
-
-  <tr>
-    <td><code>PATCH /api/appointments/:id</code></td>
-    <td>
-      <pre><code>{
-	"observations": "Observação no agendamento"
-}</code></pre>
-    </td>
-    <td>204 No Content</td>
-  </tr>
-
-  <tr>
-    <td><code>DELETE /api/appointments/:id</code></td>
-    <td>No Body</td>
-    <td>204 No Content</td>
-  </tr>
-</table>
-<br />
-
-### 🤖 Interações com bot (bot_interactions)
-
-#### Model
-
-| Campo | Tipo | Descrição | Constraints |
-| ----- | ---- | --------- | ----------- |
-| id |	Int |	Identificador |	PK |
-| company_id |	Int |	Empresa |	FK, NOT NULL |
-| client_id |	Int |	Cliente |	FK, NOT NULL |
-| type |	enum |	Tipo (APPOINTMENT, CANCELLATION, REAPPOINTMENT, INQUIRY, OTHER) |	NOT NULL |
-| status |	enum |	Status (IN_PROGRESS, WAITING_PAYMENT, SCHEDULED, CANCELED, OTHER) |	NOT NULL |
-| data |	Json |	Dados da interação |	NOT NULL |
-| created_at | DateTime | Data de criação | NOT NULL, DEFAUT (now()) |
-| updated_at | DateTime | Última atualização | NOT NULL, AUTO UPDATE |
-
-#### Endpoints
-
-<p style="color:yellow">⚠️ Protegidas por JWT</p>
-
-<table>
-  <tr>
-    <th>Endpoint</th>
-    <th>Body</th>
-    <th>Response</th>
-  </tr>
-  <tr>
-    <td><code>GET /api/bot-interactions</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Consulta realizada com sucesso!",
-	"data": [
-		{
-			"id": 1,
-			"company_id": 1,
-			"client_id": 3,
-			"type": "APPOINTMENT",
-			"status": "SCHEDULED",
-			"data": {
-				"notes": "Cliente quer atendimento presencial",
-				"service": "Consulta inicial",
-				"duration_minutes": 60
-			},
-			"created_at": "2026-04-16T23:01:42.049Z",
-			"updated_at": "2026-04-16T23:01:42.049Z"
-		}
-	]
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>GET /api/bot-interactions/:id</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Agendamento encontrado com sucesso!",
-	"data": {
-		"id": 4,
-		"company_id": 1,
-		"service_id": 4,
-		"employee_id": 2,
-		"client_id": 4,
-		"start_time": "2025-12-30T14:58:46.461Z",
-		"end_time": "2025-12-30T16:58:46.461Z",
-		"observations": null,
-		"status": "COMPLETED",
-		"created_at": "2026-04-13T21:58:46.594Z",
-		"updated_at": "2026-04-13T21:58:46.594Z"
-	}
-}</code></pre></td>
-  </tr>
-
-  <tr>
-    <td><code>POST /api/bot-interactions</code></td>
-    <td><pre><code>{
-  "company_id": "1",
-  "client_id": "1",
-  "type": "APPOINTMENT",
-  "status": "SCHEDULED",
+```json
+{
+  "message": "Usuário encontrado com sucesso!",
   "data": {
-    "notes": "Cliente quer atendimento presencial",
-    "service": "Consulta inicial",
-    "duration_minutes": 60
+    "id": 1,
+    "name": "João",
+    "email": "joao@email.com",
+    "phone": "51999999999",
+    "status": "ACTIVE",
+    "last_login": "2026-06-22T12:00:00.000Z",
+    "created_at": "2026-06-20T12:00:00.000Z",
+    "updated_at": "2026-06-22T12:00:00.000Z"
   }
-}</code></pre></td>
-    <td>204 No Content</td>
-  </tr>
+}
+```
 
-  <tr>
-    <td><code>PATCH /api/bot-interactions/:id</code></td>
-    <td>
-      <pre><code>{
-	"status": "CANCELED"
-}</code></pre>
-    </td>
-    <td>204 No Content</td>
-  </tr>
+---
 
-  <tr>
-    <td><code>DELETE /api/bot-interactions/:id</code></td>
-    <td>No Body</td>
-    <td>204 No Content</td>
-  </tr>
-</table>
-<br />
+## 🏢 Empresas (`companies`)
 
-### 💳 Assinaturas (signatures)
+### Model
 
-#### Model
+| Campo | Tipo |
+| ----- | ---- |
+| `id` | Int |
+| `legal_name` | String |
+| `fantasy_name` | String |
+| `cnpj` | String |
+| `email` | String |
+| `password` | String |
+| `phone` | String |
+| `approved` | Boolean |
+| `photo` | String nullable |
+| `website` | String nullable |
+| `accepted_payment_methods` | `PIX \| CREDIT \| DEBIT \| CASH`[] |
+| `amenities` | enum[] |
+| `low_stock_threshold` | Int |
+| `plan` | `FREE \| PRO` |
+| `status` | `PENDING \| APPROVED \| DENIED` |
+| `approve_date` | DateTime nullable |
 
-| Campo | Tipo | Descrição | Constraints |
-| ----- | ---- | --------- | ----------- |
-| id |	Int |	Identificador |	PK |
-| company_id |	Int |	Empresa |	FK, NOT NULL |
-| plan |	enum |	Plano (FREE, PRO) |	NOT NULL, DEFAULT (FREE) |
-| status |	enum |	Status (PENDING, ACTIVE, EXPIRED, CANCELED) |	NOT NULL, DEFAULT (PENDING) |
-| start_date |	DateTime |	Início da assinatura |	NOT NULL |
-| renovation_date |	DateTime |	Data de renovação |	NOT NULL |
-| cancellation_date |	DateTime |	Data de cancelamento |	NULL |
-| paid |	Boolean |	Indica se está pago |	NOT NULL, DEFAULT (false) |
-| created_at | DateTime | Data de criação | NOT NULL, DEFAUT (now()) |
-| updated_at | DateTime | Última atualização | NOT NULL, AUTO UPDATE |
+### Auth
 
-#### Endpoints
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `POST /auth/companies/register` | dados da empresa | `204 No Content` |
+| `POST /auth/companies/login` | `{ "email": "empresa@email.com", "password": "123456" }` | `{ "token": "...", "id": 1, "approved": false, "status": "PENDING", "approve_date": null }` |
 
-<p style="color:yellow">⚠️ Protegidas por JWT</p>
+Body de cadastro:
 
-<table>
-  <tr>
-    <th>Endpoint</th>
-    <th>Body</th>
-    <th>Response</th>
-  </tr>
-  <tr>
-    <td><code>GET /api/appointments</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Consulta realizada com sucesso!",
-	"data": [
-		{
-			"id": 1,
-			"company_id": 1,
-			"plan": "PRO",
-			"status": "PENDING",
-			"start_date": "2026-03-12T09:00:00.000Z",
-			"renovation_date": "2026-04-12T09:00:00.000Z",
-			"cancellation_date": null,
-			"paid": true,
-			"created_at": "2026-04-16T23:03:51.909Z",
-			"updated_at": "2026-04-16T23:03:51.909Z"
-		}
-	]
-}</code></pre></td>
-  </tr>
+```json
+{
+  "legal_name": "Empresa LTDA",
+  "fantasy_name": "Sked Barber",
+  "cnpj": "12345678000199",
+  "email": "empresa@email.com",
+  "password": "123456",
+  "phone": "51999999999",
+  "photo": null,
+  "website": "https://empresa.com",
+  "accepted_payment_methods": ["PIX", "CREDIT"],
+  "amenities": ["WIFI", "PARKING"],
+  "low_stock_threshold": 3,
+  "plan": "FREE"
+}
+```
 
-  <tr>
-    <td><code>GET /api/appointments/:id</code></td>
-    <td>No Body</td>
-    <td><pre><code>{
-	"message": "Assinatura encontrada com sucesso!",
-	"data": {
-		"id": 1,
-		"company_id": 1,
-		"plan": "PRO",
-		"status": "PENDING",
-		"start_date": "2026-03-12T09:00:00.000Z",
-		"renovation_date": "2026-04-12T09:00:00.000Z",
-		"cancellation_date": null,
-		"paid": true,
-		"created_at": "2026-04-16T23:03:51.909Z",
-		"updated_at": "2026-04-16T23:03:51.909Z"
-	}
-}</code></pre></td>
-  </tr>
+### Endpoints protegidos
 
-  <tr>
-    <td><code>POST /api/appointments</code></td>
-    <td><pre><code>{
-  "company_id": "1",
-  "plan": "PRO",
-  "start_date": "2026-03-12T09:00:00Z",
-  "renovation_date": "2026-04-12T09:00:00Z",
-  "paid": true
-}</code></pre></td>
-    <td>204 No Content</td>
-  </tr>
+| Endpoint | Body / Query | Response |
+| --- | --- | --- |
+| `GET /api/companies` | sem body | lista de empresas |
+| `GET /api/companies/:id` | sem body | empresa |
+| `PATCH /api/companies/:id` | campos parciais da empresa | `{ "message": "Empresa atualizada com sucesso!", "data": { "phoneChanged": false } }` |
+| `DELETE /api/companies/:id` | sem body | `204 No Content` |
+| `GET /api/companies/:id/data` | sem body | payload agregado do dashboard |
+| `GET /api/companies/:id/appointments` | `page`, `limit`, `date`, `service`, `client`, `status`, `employeeId`, `timeStart`, `timeEnd`, `excludeId` | paginação de agendamentos |
+| `GET /api/companies/:id/appointments/export` | mesmos filtros de appointments | lista completa sem paginação |
+| `GET /api/companies/:id/cancellations` | `page`, `limit`, `filterPeriod=month\|week\|day\|year` | paginação de cancelamentos |
+| `GET /api/companies/:id/cancellations/summary` | `page`, `limit`, `filterPeriod` | métricas e gráficos de cancelamentos |
+| `GET /api/companies/:id/revenue` | `page`, `limit`, `filterPeriod` | paginação de receitas |
+| `GET /api/companies/:id/revenue/summary` | `page`, `limit`, `filterPeriod` | métricas e gráficos de receitas |
+| `GET /api/companies/:id/revenue/appointments` | `limit` | opções de agendamento para lançamento financeiro |
+| `POST /api/companies/:id/revenue/transactions` | lançamento de receita | receita criada |
+| `GET /api/companies/:id/services` | sem body | lista de serviços da empresa |
+| `GET /api/companies/:id/products` | sem body | estoque + métricas |
+| `GET /api/companies/:id/professionals` | sem body | profissionais + vínculos |
+| `GET /api/companies/:id/customers` | `page`, `limit` | paginação de clientes |
+| `GET /api/companies/:id/customers/summary` | `limit` | resumo inicial de clientes |
+| `GET /api/companies/:id/settings` | sem body | configurações da empresa |
+| `GET /api/companies/:id/evolution/status` | sem body | status da instância WhatsApp |
+| `POST /api/companies/:id/evolution/connect` | sem body | início de conexão da instância |
+| `POST /api/companies/:id/evolution/disconnect` | sem body | desconexão da instância |
+| `PATCH /api/companies/:id/evolution/auto-messages` | `{ "enabled": true }` | status atualizado |
 
-  <tr>
-    <td><code>PATCH /api/appointments/:id</code></td>
-    <td>
-      <pre><code>{
-	"status": "CANCELED"
-}</code></pre>
-    </td>
-    <td>204 No Content</td>
-  </tr>
+Exemplo de retorno de `GET /api/companies/:id/settings`:
 
-  <tr>
-    <td><code>DELETE /api/appointments/:id</code></td>
-    <td>No Body</td>
-    <td>204 No Content</td>
-  </tr>
-</table>
+```json
+{
+  "message": "Configurações encontradas com sucesso!",
+  "data": {
+    "photo": null,
+    "fantasy_name": "Sked Barber",
+    "email": "empresa@email.com",
+    "phone": "51999999999",
+    "website": "https://empresa.com",
+    "acceptedPaymentMethods": ["PIX", "CREDIT"],
+    "amenities": ["WIFI", "PARKING"],
+    "lowStockThreshold": 3,
+    "evolution": {
+      "instanceName": "company-1-sked-barber",
+      "status": "open",
+      "profilePictureUrl": null,
+      "autoMessagesEnabled": true,
+      "companyPhone": "51999999999",
+      "connectedPhone": "51999999999",
+      "phoneMatchesCompany": true,
+      "phoneMismatch": false,
+      "rawConnected": true,
+      "connected": true
+    }
+  }
+}
+```
+
+Exemplo de retorno de `GET /api/companies/:id/appointments`:
+
+```json
+{
+  "message": "Agendamentos encontrados com sucesso!",
+  "data": {
+    "data": [],
+    "page": 1,
+    "limit": 50,
+    "total": 0,
+    "totalPages": 0
+  }
+}
+```
+
+Exemplo de body para `POST /api/companies/:id/revenue/transactions`:
+
+```json
+{
+  "appointment_id": 10,
+  "description": "Entrada parcial",
+  "amount": 35.5,
+  "payment_method": "PIX",
+  "status": "RECEIVED",
+  "occurred_at": "2026-06-22T14:00:00.000Z"
+}
+```
+
+Retorno:
+
+```json
+{
+  "message": "Receita registrada com sucesso!",
+  "data": {
+    "id": "7",
+    "date": "2026-06-22T14:00:00.000Z",
+    "clientName": "Maria",
+    "serviceName": "Corte",
+    "professionalName": "Carlos",
+    "paymentMethod": "PIX",
+    "value": 35.5,
+    "status": "COMPLETED",
+    "description": "Entrada parcial",
+    "appointmentId": 10
+  }
+}
+```
+
+---
+
+## 📍 Endereços (`addresses`)
+
+### Model
+
+| Campo | Tipo |
+| ----- | ---- |
+| `id` | Int |
+| `company_id` | Int |
+| `cep` | String |
+| `street` | String |
+| `number` | String |
+| `complement` | String nullable |
+| `neighborhood` | String |
+| `city` | String |
+| `state` | String |
+
+### Endpoints
+
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `GET /api/addresses` | sem body | lista de endereços |
+| `GET /api/addresses/:id` | sem body | endereço |
+| `POST /api/addresses` | `{ "company_id": 1, "cep": "90000000", "street": "Rua A", "number": "123", "complement": null, "neighborhood": "Centro", "city": "Porto Alegre", "state": "RS" }` | `204 No Content` |
+| `PATCH /api/addresses/:id` | campos parciais | `204 No Content` |
+| `DELETE /api/addresses/:id` | sem body | `204 No Content` |
+
+---
+
+## 👔 Profissionais (`professionals` / `employees`)
+
+### Model
+
+| Campo | Tipo |
+| ----- | ---- |
+| `id` | Int |
+| `company_id` | Int |
+| `user_id` | Int nullable |
+| `name` | String |
+| `email` | String |
+| `phone` | String |
+| `role` | `MANAGER \| EMPLOYEE` |
+| `status` | `ACTIVE \| DISABLED` |
+
+### Endpoints
+
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `GET /api/professionals` | sem body | lista de profissionais da empresa do token |
+| `GET /api/professionals/:id` | sem body | profissional |
+| `POST /api/professionals` | profissional + `services[]` + `scheduleOpenings[]` | `204 No Content` |
+| `PATCH /api/professionals/:id` | campos parciais | `204 No Content` |
+| `DELETE /api/professionals/:id` | sem body | `204 No Content` |
+
+Body de criação:
+
+```json
+{
+  "company_id": 1,
+  "user_id": null,
+  "name": "Carlos",
+  "email": "carlos@email.com",
+  "phone": "51999999999",
+  "role": "EMPLOYEE",
+  "status": "ACTIVE",
+  "services": [1, 2],
+  "scheduleOpenings": [
+    { "week_day": 1, "start_time": "09:00", "end_time": "18:00" }
+  ]
+}
+```
+
+---
+
+## 🕒 Aberturas de agenda (`schedule_openings`)
+
+### Model
+
+| Campo | Tipo |
+| ----- | ---- |
+| `id` | Int |
+| `company_id` | Int |
+| `employee_id` | Int |
+| `week_day` | Int (`0` a `6`) |
+| `start_time` | `HH:mm` |
+| `end_time` | `HH:mm` |
+
+### Endpoints
+
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `GET /api/schedule-openings` | sem body | lista |
+| `GET /api/schedule-openings/:id` | sem body | item |
+| `POST /api/schedule-openings` | `{ "company_id": 1, "employee_id": 2, "week_day": 1, "start_time": "09:00", "end_time": "18:00" }` | `204 No Content` |
+| `PATCH /api/schedule-openings/:id` | campos parciais | `204 No Content` |
+| `DELETE /api/schedule-openings/:id` | sem body | `204 No Content` |
+
+---
+
+## 🚫 Bloqueios de agenda (`schedule_blocks`)
+
+### Model
+
+| Campo | Tipo |
+| ----- | ---- |
+| `id` | Int |
+| `company_id` | Int |
+| `employee_id` | Int |
+| `start_time` | DateTime |
+| `end_time` | DateTime nullable |
+| `reason` | String |
+
+### Endpoints
+
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `GET /api/schedule-blocks` | sem body | lista |
+| `GET /api/schedule-blocks/:id` | sem body | item |
+| `POST /api/schedule-blocks` | `{ "company_id": 1, "employee_id": 2, "start_time": "2026-06-22T13:00:00.000Z", "end_time": "2026-06-22T14:00:00.000Z", "reason": "Almoço" }` | `204 No Content` |
+| `PATCH /api/schedule-blocks/:id` | campos parciais | `204 No Content` |
+| `DELETE /api/schedule-blocks/:id` | sem body | `204 No Content` |
+
+---
+
+## ✂️ Serviços (`services`)
+
+### Model
+
+| Campo | Tipo |
+| ----- | ---- |
+| `id` | Int |
+| `company_id` | Int |
+| `name` | String |
+| `category` | enum |
+| `description` | String nullable |
+| `duration_minutes` | Int |
+| `price` | Decimal |
+| `commission` | Decimal |
+| `status` | `ACTIVE \| DISABLED` |
+
+### Endpoints
+
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `GET /api/services` | sem body | lista |
+| `GET /api/services/:id` | sem body | item |
+| `POST /api/services` | `{ "company_id": 1, "name": "Corte", "description": "Corte masculino", "duration_minutes": 45, "commission": 40, "category": "HAIR", "price": 50, "status": "ACTIVE" }` | `{ "message": "Serviço criado com sucesso!", "data": { ... } }` |
+| `PATCH /api/services/:id` | campos parciais | `204 No Content` |
+| `DELETE /api/services/:id` | sem body | `204 No Content` |
+
+Categorias aceitas em `services` e `products`:
+
+`HAIR`, `BEARD`, `AESTHETIC`, `NAILS`, `MASSAGE`, `THERAPY`, `HEALTH`, `DENTAL`, `FITNESS`, `BEAUTY`, `AUTOMOTIVE`, `TECHNICAL`, `HOME_SERVICE`, `PET`, `CONSULTING`, `EDUCATION`, `OTHER`
+
+---
+
+## 📅 Agendamentos (`appointments`)
+
+### Model
+
+| Campo | Tipo |
+| ----- | ---- |
+| `id` | Int |
+| `company_id` | Int |
+| `service_id` | Int |
+| `employee_id` | Int |
+| `client_id` | Int |
+| `start_time` | DateTime |
+| `end_time` | DateTime |
+| `observations` | String nullable |
+| `status` | `PENDING \| CONFIRMED \| COMPLETED \| CANCELED \| NO_SHOW` |
+| `cancel_reason` | enum nullable |
+| `payment_method` | enum nullable |
+
+### Endpoints
+
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `GET /api/appointments` | sem body | lista |
+| `GET /api/appointments/:id` | sem body | agendamento |
+| `GET /api/appointments/:id/:date` | `:id` = company_id, `:date` = `YYYY-MM-DD` | agendamentos da data |
+| `POST /api/appointments` | payload de agendamento | `201 Created` com agendamento criado |
+| `PATCH /api/appointments/:id` | campos parciais | `200 OK` com agendamento atualizado |
+| `DELETE /api/appointments/:id` | sem body | `204 No Content` |
+
+Body de criação:
+
+```json
+{
+  "company_id": 1,
+  "service_id": 1,
+  "employee_id": 2,
+  "client_id": 3,
+  "start_time": "2026-06-22T15:00:00.000Z",
+  "observations": "Cliente prefere tesoura",
+  "status": "CONFIRMED"
+}
+```
+
+Regras importantes:
+
+- `end_time` é calculado automaticamente a partir da duração do serviço.
+- o horário precisa caber em uma abertura de agenda do profissional.
+- conflitos de horário retornam `409`.
+
+Exemplo de retorno de criação:
+
+```json
+{
+  "message": "Agendamento criado com sucesso!",
+  "data": {
+    "id": 12,
+    "company_id": 1,
+    "service_id": 1,
+    "employee_id": 2,
+    "client_id": 3,
+    "start_time": "2026-06-22T15:00:00.000Z",
+    "end_time": "2026-06-22T15:45:00.000Z",
+    "observations": "Cliente prefere tesoura",
+    "status": "CONFIRMED"
+  }
+}
+```
+
+---
+
+## 🤖 Interações do bot (`bot_interactions`)
+
+### Model
+
+| Campo | Tipo |
+| ----- | ---- |
+| `id` | Int |
+| `company_id` | Int |
+| `client_id` | Int |
+| `type` | `APPOINTMENT \| CANCELLATION \| REAPPOINTMENT \| INQUIRY \| OTHER` |
+| `status` | `IN_PROGRESS \| WAITING_PAYMENT \| SCHEDULED \| CANCELED \| OTHER` |
+| `data` | JSON |
+
+### Endpoints REST
+
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `GET /api/bot-interactions` | sem body | lista |
+| `GET /api/bot-interactions/:id` | sem body | item |
+| `POST /api/bot-interactions` | `{ "company_id": 1, "client_id": 3, "type": "INQUIRY", "status": "IN_PROGRESS", "data": {} }` | `204 No Content` |
+| `PATCH /api/bot-interactions/:id` | campos parciais | `204 No Content` |
+| `DELETE /api/bot-interactions/:id` | sem body | `204 No Content` |
+
+### Endpoints Evolution
+
+| Endpoint | Body / Query | Response |
+| --- | --- | --- |
+| `POST /api/bot-interactions/evolution/instance` | `{ "company_id": 1, "instanceName": "company-1-sked", "qrcode": true }` | `201` com dados da instância |
+| `POST /api/bot-interactions/evolution/instance/connect` | `{ "company_id": 1, "instanceName": "company-1-sked" }` | `200` com status da conexão |
+| `GET /api/bot-interactions/evolution/instance/status?company_id=1&instanceName=company-1-sked` | query string | `200` com status |
+| `POST /api/bot-interactions/evolution/message/text` | `{ "company_id": 1, "instanceName": "company-1-sked", "number": "5511999999999", "text": "Olá", "delay": 0, "linkPreview": false }` | `200` com retorno da Evolution |
+
+### Webhook
+
+| Endpoint | Header | Response |
+| --- | --- | --- |
+| `POST /webhooks/evolution` | `x-webhook-secret` opcional | `204 No Content` |
+| `POST /webhooks/evolution/:event` | `x-webhook-secret` opcional | `204 No Content` |
+
+Se `EVOLUTION_WEBHOOK_SECRET` estiver definido e o header não bater, a API retorna:
+
+```json
+{
+  "message": "Webhook nao autorizado"
+}
+```
+
+---
+
+## 🧾 Assinaturas (`signatures`)
+
+### Model
+
+| Campo | Tipo |
+| ----- | ---- |
+| `id` | Int |
+| `company_id` | Int |
+| `plan` | `FREE \| PRO` |
+| `status` | `PENDING \| ACTIVE \| EXPIRED \| CANCELED` |
+| `start_date` | DateTime |
+| `renovation_date` | DateTime |
+| `cancellation_date` | DateTime nullable |
+| `paid` | Boolean |
+
+### Endpoints
+
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `GET /api/signatures` | sem body | lista |
+| `GET /api/signatures/:id` | sem body | item |
+| `POST /api/signatures` | `{ "company_id": 1, "plan": "PRO", "status": "ACTIVE", "start_date": "2026-06-01T00:00:00.000Z", "renovation_date": "2026-07-01T00:00:00.000Z", "cancellation_date": null, "paid": true }` | `204 No Content` |
+| `PATCH /api/signatures/:id` | campos parciais | `204 No Content` |
+| `DELETE /api/signatures/:id` | sem body | `204 No Content` |
+
+---
+
+## 📦 Produtos (`products`)
+
+### Model
+
+| Campo | Tipo |
+| ----- | ---- |
+| `id` | Int |
+| `company_id` | Int |
+| `name` | String |
+| `category` | enum |
+| `quantity` | Int |
+| `cost_price` | Decimal |
+
+### Endpoints
+
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `GET /api/products` | sem body | lista |
+| `GET /api/products/:id` | sem body | item |
+| `POST /api/products` | `{ "company_id": 1, "name": "Pomada", "category": "BEAUTY", "quantity": 10, "cost_price": 18.9 }` | `{ "message": "Produto criado com sucesso!", "data": { ... } }` |
+| `PATCH /api/products/:id` | campos parciais | `204 No Content` |
+| `DELETE /api/products/:id` | sem body | `204 No Content` |
+
+Exemplo de retorno agregado em `GET /api/companies/:id/products`:
+
+```json
+{
+  "message": "Produtos encontrados com sucesso!",
+  "data": {
+    "products": [],
+    "totalProducts": 0,
+    "totalCost": 0,
+    "lowStock": 0,
+    "outOfStock": 0,
+    "lowStockThreshold": 2
+  }
+}
+```
+
+---
+
+## 👥 Clientes (`customers`)
+
+### Model
+
+| Campo | Tipo |
+| ----- | ---- |
+| `id` | Int |
+| `name` | String |
+| `phone` | String |
+
+### Endpoints
+
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `POST /api/customers` | `{ "company_id": 1, "name": "Maria", "phone": "51988887777" }` | `{ "message": "Cliente cadastrado com sucesso!", "data": { ... } }` |
+| `PATCH /api/customers/:id` | campos parciais | `{ "message": "Cliente atualizado com sucesso!", "data": { ... } }` |
+| `GET /api/companies/:id/customers` | `page`, `limit` | paginação |
+| `GET /api/companies/:id/customers/summary` | `limit` | resumo inicial |
+
+Exemplo de retorno de resumo:
+
+```json
+{
+  "message": "Clientes encontrados com sucesso!",
+  "data": {
+    "totalCustomers": 120,
+    "newCustomers": 15,
+    "returningCustomers": 38,
+    "customers": []
+  }
+}
+```
+
+---
+
+## 🛠️ Admin
+
+As rotas de admin exigem o header `x-admin-password`.
+
+| Endpoint | Header | Response |
+| --- | --- | --- |
+| `GET /admin/companies/pending` | `x-admin-password` | lista de empresas pendentes |
+| `PATCH /admin/companies/:id/approve` | `x-admin-password` | empresa aprovada |
+
+Exemplo:
+
+```json
+{
+  "message": "Empresa aprovada com sucesso!",
+  "data": {
+    "id": 1,
+    "fantasy_name": "Sked Barber",
+    "legal_name": "Empresa LTDA",
+    "approved": true,
+    "status": "APPROVED",
+    "approve_date": "2026-06-22T15:00:00.000Z"
+  }
+}
+```
+
+Erros de admin:
+
+```json
+{
+  "error": "Senha do painel admin inválida"
+}
+```
+
+---
+
+## ✉️ Contato
+
+| Endpoint | Body | Response |
+| --- | --- | --- |
+| `POST /contact` | `{ "name": "João", "email": "joao@email.com", "message": "Quero saber mais." }` | `204 No Content` |
+
+Erros possíveis:
+
+- `400` para dados inválidos
+- `503` quando SMTP não estiver configurado
+- `500` quando o envio falhar
+
+---
+
+## Enums úteis
+
+### `status_enum`
+
+`ACTIVE`, `DISABLED`
+
+### `plan_enum`
+
+`FREE`, `PRO`
+
+### `company_status_enum`
+
+`PENDING`, `APPROVED`, `DENIED`
+
+### `appointment_status`
+
+`PENDING`, `CONFIRMED`, `COMPLETED`, `CANCELED`, `NO_SHOW`
+
+### `cancel_reason`
+
+`NO_SHOW`, `SCHEDULE_CONFLICT`, `ILLNESS`, `EMERGENCY`, `PROFESSIONAL_UNAVAILABLE`, `OTHER`
+
+### `payment_method_enum`
+
+`PIX`, `CREDIT`, `DEBIT`, `CASH`
+
+### `company_amenity_enum`
+
+`ACCEPTS_CHILDREN`, `WIFI`, `PARKING`, `ACCEPTS_AUTISTIC`, `ACCESSIBILITY`, `PET_FRIENDLY`
+
+---
+
+## Variáveis de ambiente
+
+O arquivo `.env.example` já reflete o estado atual do projeto. As principais variáveis são:
+
+- `API_PORT`
+- `ADMIN_PANEL_PASSWORD`
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `CORS_URL`
+- `APP_TIMEZONE`
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `CONTACT_TO_EMAIL`
+- `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_WEBHOOK_URL`, `EVOLUTION_WEBHOOK_SECRET`
+- `EVOLUTION_AUTO_REPLY_ENABLED`, `EVOLUTION_AUTO_REPLY_MAX_MESSAGE_AGE_SECONDS`
+- `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL`
+
+---
+
+## Scripts
+
+```bash
+npm run dev
+npx prisma generate
+npx prisma migrate deploy
+npm run seed:aesthetic
+```
