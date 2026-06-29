@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { EvolutionService } from "./evolution.service.js";
 import socketServer from "../socket.js";
+import { assertEmailAvailable, normalizeEmail } from "./email-identity.service.js";
 
 const { PrismaClient, Prisma } = pkg 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -802,10 +803,11 @@ export class CompanyService {
   async create(company) {
     const {
       legal_name, fantasy_name, cnpj,
-      email, password, phone, photo, website, accepted_payment_methods, amenities,
+      password, phone, photo, website, accepted_payment_methods, amenities,
       low_stock_threshold,
       plan,
     } = company;
+    const email = normalizeEmail(company.email);
 
     const existingCompanyWithPhone = await prisma.company.findFirst({
       where: { phone },
@@ -815,6 +817,8 @@ export class CompanyService {
     if (existingCompanyWithPhone) {
       throw new CompanyConflictError("Este telefone já está sendo usado");
     }
+
+    await assertEmailAvailable(prisma, email);
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -835,6 +839,12 @@ export class CompanyService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
       ) {
+        const target = Array.isArray(error.meta?.target) ? error.meta.target.join(",") : String(error.meta?.target || "");
+
+        if (target.includes("email")) {
+          await assertEmailAvailable(prisma, email);
+        }
+
         throw new CompanyConflictError("Este telefone já está sendo usado");
       }
 
@@ -882,6 +892,7 @@ export class CompanyService {
 
   async update(id, data, options = {}) {
     try {
+      const nextData = { ...data };
       const currentCompany = await prisma.company.findUnique({
         where: { id },
         select: {
@@ -897,13 +908,28 @@ export class CompanyService {
         return false;
       }
 
-      const nextPhone = data.phone ?? currentCompany.phone ?? "";
+      const nextPhone = nextData.phone ?? currentCompany.phone ?? "";
       const shouldResetEvolutionConnection = hasPhoneChanged(currentCompany.phone, nextPhone);
 
-      if (data.phone && data.phone !== currentCompany.phone) {
+      if (typeof nextData.email === "string") {
+        nextData.email = normalizeEmail(nextData.email);
+        await assertEmailAvailable(prisma, nextData.email, {
+          excludeCompanyId: id,
+        });
+      }
+
+      if (typeof nextData.password === "string") {
+        if (nextData.password.length > 0) {
+          nextData.password = await bcrypt.hash(nextData.password, 10);
+        } else {
+          delete nextData.password;
+        }
+      }
+
+      if (nextData.phone && nextData.phone !== currentCompany.phone) {
         const existingCompanyWithPhone = await prisma.company.findFirst({
           where: {
-            phone: data.phone,
+            phone: nextData.phone,
             id: { not: id },
           },
           select: { id: true },
@@ -916,7 +942,7 @@ export class CompanyService {
 
       let updatedCompany = await prisma.company.update({
         where: { id },
-        data,
+        data: nextData,
       });
 
       if (shouldResetEvolutionConnection) {
@@ -936,6 +962,13 @@ export class CompanyService {
         throw error;
       }
 
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new CompanyConflictError("Este telefone já está sendo usado");
+      }
+
       return false;
     }
   }
@@ -953,10 +986,16 @@ export class CompanyService {
   }
 
   async login(credentials, res) {
-    const { email, password } = credentials;
+    const { password } = credentials;
+    const email = normalizeEmail(credentials.email);
     
-    const company = await prisma.company.findUnique({
-      where: { email: email },
+    const company = await prisma.company.findFirst({
+      where: {
+        email: {
+          equals: email,
+          mode: "insensitive",
+        },
+      },
     });
 
     if (!company) return res.status(401).json({ error: "Credenciais inválidas" });
@@ -1052,7 +1091,9 @@ export class CompanyService {
     };
   }
 
-  async getAllData(id) {
+  async getAllData(id, options = {}) {
+    const employeeId = Number(options.employeeId || 0) || null;
+    const isEmployeeScoped = Boolean(employeeId);
     const [
       dashboard,
       dailySchedules,
@@ -1067,16 +1108,16 @@ export class CompanyService {
       customers,
       settings
     ] = await Promise.all([
-      this.getDashboard(id),
-      this.getDailySchedules(id),
-      this.getAppointments(id),
-      this.getInitialCancellations(id),
-      this.getInitialRevenues(id),
+      isEmployeeScoped ? null : this.getDashboard(id),
+      this.getDailySchedules(id, { employeeId }),
+      this.getAppointments(id, 1, 50, {}, { employeeId }),
+      isEmployeeScoped ? null : this.getInitialCancellations(id),
+      isEmployeeScoped ? null : this.getInitialRevenues(id),
       // commissions
       // reports
       this.getProducts(id),
       this.getServices(id),
-      this.getProfessionals(id),
+      this.getProfessionals(id, { employeeId }),
       this.getInitialCustomers(id),
       this.getSettings(id)
     ])
@@ -1330,7 +1371,8 @@ export class CompanyService {
     }
   }
 
-  async getDailySchedules(id) {
+  async getDailySchedules(id, options = {}) {
+    const employeeId = Number(options.employeeId || 0) || null;
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
@@ -1340,6 +1382,7 @@ export class CompanyService {
     const appointments = await prisma.appointment.findMany({
       where: {
         company_id: id,
+        ...(employeeId ? { employee_id: employeeId } : {}),
         start_time: { gte: startOfDay, lte: endOfDay, },
       },
       orderBy: { start_time: "asc" },
@@ -1350,7 +1393,10 @@ export class CompanyService {
     });
 
     const professionals = await prisma.employee.findMany({
-      where: { company_id: id, },
+      where: {
+        company_id: id,
+        ...(employeeId ? { id: employeeId } : {}),
+      },
       include: { user: true, },
     });
 
@@ -1361,9 +1407,10 @@ export class CompanyService {
     }
   }
 
-  buildAppointmentFiltersWhere(id, filters = {}) {
+  buildAppointmentFiltersWhere(id, filters = {}, options = {}) {
     const where = {
       company_id: id,
+      ...(options.employeeId ? { employee_id: Number(options.employeeId) } : {}),
     };
 
     if (filters.id) {
@@ -1417,7 +1464,7 @@ export class CompanyService {
       where.status = filters.status.toUpperCase();
     }
 
-    if (filters.employeeId) {
+    if (filters.employeeId && !options.employeeId) {
       where.employee_id = Number(filters.employeeId);
     }
 
@@ -1466,7 +1513,7 @@ export class CompanyService {
     return true;
   }
 
-  async getAppointments(id, page = 1, limit = 50, filters = {}) {
+  async getAppointments(id, page = 1, limit = 50, filters = {}, options = {}) {
     const hasFilter = Boolean(
       filters.id ||
       filters.date ||
@@ -1478,7 +1525,7 @@ export class CompanyService {
       filters.timeStart ||
       filters.timeEnd
     );
-    const where = this.buildAppointmentFiltersWhere(id, filters);
+    const where = this.buildAppointmentFiltersWhere(id, filters, options);
     const shouldFilterByTimeOnlyInMemory =
       !filters.date && (filters.timeStart || filters.timeEnd);
 
@@ -1538,8 +1585,8 @@ export class CompanyService {
     };
   }
 
-  async exportAppointments(id, filters = {}) {
-    const where = this.buildAppointmentFiltersWhere(id, filters);
+  async exportAppointments(id, filters = {}, options = {}) {
+    const where = this.buildAppointmentFiltersWhere(id, filters, options);
     const appointments = await prisma.appointment.findMany({
       where,
       orderBy: { start_time: "desc" },
@@ -2240,10 +2287,12 @@ export class CompanyService {
     };
   }
 
-  async getProfessionals(id) {
+  async getProfessionals(id, options = {}) {
+    const employeeId = Number(options.employeeId || 0) || null;
     const professionals = await prisma.employee.findMany({
       where: {
         company_id: id,
+        ...(employeeId ? { id: employeeId } : {}),
       },
       include: {
         services: true,
