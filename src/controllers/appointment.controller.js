@@ -12,6 +12,25 @@ const getRealtimeOptions = (req) => ({
   excludedSocketId: req.headers["x-socket-id"],
 });
 
+const getEmployeeScope = (req) => {
+  const isEmployeeSession =
+    req.user?.auth_type === "user" && req.user?.role === "EMPLOYEE";
+
+  if (!isEmployeeSession) return {};
+
+  return {
+    employeeId: Number(req.user?.employee_id || 0) || null,
+  };
+};
+
+const canAccessAppointment = (req, appointment) => {
+  const employeeId = getEmployeeScope(req).employeeId;
+
+  if (!employeeId) return true;
+
+  return Number(appointment?.employee_id) === employeeId;
+};
+
 export default class AppointmentController {
   async findAll(req, res) {
     const appointments = await service.findAll();
@@ -33,8 +52,8 @@ export default class AppointmentController {
 
     const appointment = await service.findOne(id);
 
-    if (!appointment) {
-      res.status(404).json({
+    if (!appointment || !canAccessAppointment(req, appointment)) {
+      return res.status(404).json({
         message: "Agendamento não encontrado",
       });
     }
@@ -55,10 +74,10 @@ export default class AppointmentController {
       });
     }
 
-    const appointment = await service.getAppointmentsByDate(id, date);
+    const appointment = await service.getAppointmentsByDate(id, date, getEmployeeScope(req));
 
     if (!appointment) {
-      res.status(404).json({
+      return res.status(404).json({
         message: "Agendamentos não encontrados para a data informada",
       });
     }
@@ -80,9 +99,16 @@ export default class AppointmentController {
     }
 
     let createdAppointment;
+    const employeeScope = getEmployeeScope(req);
 
     try {
-      createdAppointment = await service.create(req.body, getRealtimeOptions(req));
+      createdAppointment = await service.create(
+        {
+          ...req.body,
+          ...(employeeScope.employeeId ? { employee_id: employeeScope.employeeId } : {}),
+        },
+        getRealtimeOptions(req),
+      );
     } catch (error) {
       if (error instanceof AppointmentConflictError) {
         return res.status(409).json({
@@ -116,9 +142,25 @@ export default class AppointmentController {
     }
 
     let update;
+    const employeeScope = getEmployeeScope(req);
 
     try {
-      update = await service.update(Number(req.params.id), parsed.data, getRealtimeOptions(req));
+      const currentAppointment = await service.findOne(Number(req.params.id));
+
+      if (!currentAppointment || !canAccessAppointment(req, currentAppointment)) {
+        return res.status(404).json({
+          message: "Agendamento não encontrado",
+        });
+      }
+
+      update = await service.update(
+        Number(req.params.id),
+        {
+          ...parsed.data,
+          ...(employeeScope.employeeId ? { employee_id: employeeScope.employeeId } : {}),
+        },
+        getRealtimeOptions(req),
+      );
     } catch (error) {
       if (error instanceof AppointmentConflictError) {
         return res.status(409).json({
@@ -147,6 +189,14 @@ export default class AppointmentController {
   }
 
   async delete(req, res) {
+    const currentAppointment = await service.findOne(Number(req.params.id));
+
+    if (!currentAppointment || !canAccessAppointment(req, currentAppointment)) {
+      return res.status(404).json({
+        message: "Agendamento não encontrado",
+      });
+    }
+
     const deleted = await service.delete(Number(req.params.id), getRealtimeOptions(req));
 
     if (deleted) return res.status(204).json();

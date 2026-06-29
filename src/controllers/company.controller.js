@@ -2,6 +2,7 @@ import {
   CompanyService,
   RevenueTransactionConflictError,
 } from "../services/company.service.js";
+import { EmailConflictError } from "../services/email-identity.service.js";
 import { createRevenueTransactionValidator } from "../validators/revenue-transaction.validator.js";
 import {
   createCompanyValidator,
@@ -12,6 +13,17 @@ const service = new CompanyService();
 const getRealtimeOptions = (req) => ({
   excludedSocketId: req.headers["x-socket-id"],
 });
+
+const getEmployeeScope = (req) => {
+  const isEmployeeSession =
+    req.user?.auth_type === "user" && req.user?.role === "EMPLOYEE";
+
+  if (!isEmployeeSession) return {};
+
+  return {
+    employeeId: Number(req.user?.employee_id || 0) || null,
+  };
+};
 
 export default class CompanyController {
   async findAll(req, res) {
@@ -56,11 +68,23 @@ export default class CompanyController {
       });
     }
 
-    const update = await service.update(
-      Number(req.params.id),
-      parsed.data,
-      getRealtimeOptions(req),
-    );
+    let update;
+
+    try {
+      update = await service.update(
+        Number(req.params.id),
+        parsed.data,
+        getRealtimeOptions(req),
+      );
+    } catch (error) {
+      if (error instanceof RevenueTransactionConflictError || error instanceof EmailConflictError) {
+        return res.status(409).json({
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
 
     if (update) {
       return res.status(200).json({
@@ -93,7 +117,7 @@ export default class CompanyController {
       });
     }
 
-    const data = await service.getAllData(id);
+    const data = await service.getAllData(id, getEmployeeScope(req));
 
     res.status(200).json({
       message: "Empresa encontrada com sucesso!",
@@ -111,7 +135,13 @@ export default class CompanyController {
       });
     }
 
-    const appointments = await service.getAppointments(id, page, limit, filters);
+    const appointments = await service.getAppointments(
+      id,
+      page,
+      limit,
+      filters,
+      getEmployeeScope(req),
+    );
 
     res.status(200).json({
       message: "Agendamentos encontrados com sucesso!",
@@ -129,7 +159,11 @@ export default class CompanyController {
       });
     }
 
-    const appointments = await service.exportAppointments(id, filters);
+    const appointments = await service.exportAppointments(
+      id,
+      filters,
+      getEmployeeScope(req),
+    );
 
     res.status(200).json({
       message: "Agendamentos exportados com sucesso!",

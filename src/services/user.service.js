@@ -2,8 +2,9 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import pkg from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { assertEmailAvailable, normalizeEmail } from "./email-identity.service.js";
 
-const { PrismaClient } = pkg 
+const { PrismaClient, Prisma } = pkg 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
@@ -58,24 +59,60 @@ export class UserService {
   }
 
   async create(user) {
-    const { name, email, password, phone } = user;
+    const { name, password, phone } = user;
+    const email = normalizeEmail(user.email);
+
+    await assertEmailAvailable(prisma, email);
     const hashedPassword = await bcrypt.hash(password, 10);
-   
-    await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        phone,
-      },
-    });
+
+    try {
+      await prisma.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+          phone,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        await assertEmailAvailable(prisma, email);
+      }
+
+      throw error;
+    }
 
     return;
   }
 
   async update(id, data) {
     try {
+      const currentUser = await prisma.user.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          employee: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      });
+
+      if (!currentUser) return false;
+
       const nextData = { ...data };
+
+      if (typeof nextData.email === "string") {
+        nextData.email = normalizeEmail(nextData.email);
+        await assertEmailAvailable(prisma, nextData.email, {
+          excludeUserId: id,
+          excludeEmployeeId: currentUser.employee?.id,
+        });
+      }
 
       if (typeof nextData.password === "string" && nextData.password.length > 0) {
         nextData.password = await bcrypt.hash(nextData.password, 10);
@@ -107,10 +144,16 @@ export class UserService {
   }
 
   async login(credentials, res) {
-    const { email, password } = credentials;
+    const { password } = credentials;
+    const email = normalizeEmail(credentials.email);
     
-    const user = await prisma.user.findUnique({
-      where: { email: email },
+    const user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: email,
+          mode: "insensitive",
+        },
+      },
       include: {
         employee: {
           select: {

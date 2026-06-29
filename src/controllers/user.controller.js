@@ -1,4 +1,5 @@
 import { UserService } from "../services/user.service.js";
+import { EmailConflictError } from "../services/email-identity.service.js";
 import {
   createUserValidator,
   updateUserValidator,
@@ -49,7 +50,17 @@ export default class UserController {
       });
     }
 
-    await service.create(req.body);
+    try {
+      await service.create(req.body);
+    } catch (error) {
+      if (error instanceof EmailConflictError) {
+        return res.status(409).json({
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
 
     res.status(204).json();
   }
@@ -64,7 +75,19 @@ export default class UserController {
       });
     }
 
-    const update = await service.update(Number(req.params.id), parsed.data);
+    let update;
+
+    try {
+      update = await service.update(Number(req.params.id), parsed.data);
+    } catch (error) {
+      if (error instanceof EmailConflictError) {
+        return res.status(409).json({
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
 
     if (update) return res.status(204).json();
     else

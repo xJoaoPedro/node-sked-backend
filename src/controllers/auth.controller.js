@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { createCompanyValidator, loginCompanyValidator } from "../validators/company.validator.js";
 import { createUserValidator, loginUserValidator } from "../validators/user.validator.js";
 import { CompanyConflictError, CompanyService } from "../services/company.service.js";
+import { EmailConflictError } from "../services/email-identity.service.js";
 import { UserService } from "../services/user.service.js";
 
 const companyService = new CompanyService();
@@ -41,7 +42,17 @@ export default class AuthController {
   async userRegister(req, res) {
     if (!parse(req.body, res, "user-register")) return;
 
-    await userService.create(req.body);
+    try {
+      await userService.create(req.body);
+    } catch (error) {
+      if (error instanceof EmailConflictError) {
+        return res.status(409).json({
+          message: error.message,
+        });
+      }
+
+      throw error;
+    }
 
     res.status(204).json();
   }
@@ -52,7 +63,7 @@ export default class AuthController {
     try {
       await companyService.create(req.body);
     } catch (error) {
-      if (error instanceof CompanyConflictError) {
+      if (error instanceof CompanyConflictError || error instanceof EmailConflictError) {
         return res.status(409).json({
           message: error.message,
         });
@@ -86,7 +97,7 @@ export default class AuthController {
     const currentUser = req.user || {};
     let payload = { ...currentUser };
 
-    if (currentUser.auth_type === "company" || currentUser.company_id) {
+    if (currentUser.auth_type === "company") {
       const companySession = await companyService.getCompanyApprovalSession(currentUser.company_id);
 
       if (!companySession) {

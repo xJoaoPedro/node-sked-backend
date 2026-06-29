@@ -1,5 +1,6 @@
 import { contactValidator } from "../validators/contact.validator.js";
-import { ContactService, MailConfigError } from "../services/contact.service.js";
+import { ContactService } from "../services/contact.service.js";
+import { MailConfigError } from "../services/mail.service.js";
 
 const contactService = new ContactService();
 
