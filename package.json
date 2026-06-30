@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon server.js",
-    "seed:aesthetic": "node prisma/seed-aesthetic.js"
+    "seed:aesthetic": "node prisma/seed-aesthetic.js",
+    "seed:pds": "node prisma/pdsseed.js"
   },
   "repository": {
     "type": "git",
