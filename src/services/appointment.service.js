@@ -19,6 +19,36 @@ export class AppointmentService {
     return process.env.APP_TIMEZONE || "America/Sao_Paulo";
   }
 
+  getDateKeyInTimeZone(dateValue = new Date()) {
+    if (typeof dateValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      return dateValue;
+    }
+
+    const date = new Date(dateValue);
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: this.getTimeZone(),
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      })
+        .formatToParts(date)
+        .filter(({ type }) => type !== "literal")
+        .map(({ type, value }) => [type, value]),
+    );
+
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  }
+
+  getDayRangeInTimeZone(dateValue = new Date()) {
+    const dateKey = this.getDateKeyInTimeZone(dateValue);
+
+    return {
+      start: new Date(`${dateKey}T00:00:00-03:00`),
+      end: new Date(`${dateKey}T23:59:59.999-03:00`),
+    };
+  }
+
   formatAppointmentDateTime(dateValue) {
     const date = new Date(dateValue);
     const timeZone = this.getTimeZone();
@@ -231,11 +261,7 @@ export class AppointmentService {
 
   async getAppointmentsByDate(id, date, options = {}) {
     const employeeId = Number(options.employeeId || 0) || null;
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-
-    const end = new Date(date);
-    end.setHours(23, 59, 59, 999);
+    const { start, end } = this.getDayRangeInTimeZone(date);
 
     const appointments = await prisma.appointment.findMany({
       where: {
