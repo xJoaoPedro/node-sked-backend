@@ -1373,11 +1373,7 @@ export class CompanyService {
 
   async getDailySchedules(id, options = {}) {
     const employeeId = Number(options.employeeId || 0) || null;
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
+    const { start: startOfDay, end: endOfDay } = this.getSaoPauloDayRange();
 
     const appointments = await prisma.appointment.findMany({
       where: {
